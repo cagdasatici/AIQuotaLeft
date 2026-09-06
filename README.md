@@ -1,12 +1,9 @@
 # AIQuotaLeft
 
-> **This is a personal fork of [AIQuotaBar by Toprak Yagcioglu](https://github.com/yagcioglutoprak/AIQuotaBar).**
-> Nearly all of this — the menu bar app, the provider fetchers, the widget, the install
-> tooling — is his work, under MIT. AIQuotaLeft renames only to stay out of his way: it
-> is **not** an official next version of AIQuotaBar. The difference is in the name — it
-> reports what you have **left** rather than what you have used (see
-> [Changes in this fork](#changes-in-this-fork)). If you want the original, star the
-> [upstream repo](https://github.com/yagcioglutoprak/AIQuotaBar).
+> A fork of [AIQuotaBar](https://github.com/yagcioglutoprak/AIQuotaBar) by
+> [Toprak Yagcioglu](https://github.com/yagcioglutoprak), whose work this almost
+> entirely is. It reports what you have **left** rather than what you have used —
+> see [Changes in this fork](#changes-in-this-fork). Not an official AIQuotaBar release.
 
 **Stop getting rate-limited by surprise.** See your Claude, ChatGPT, Cursor, and Copilot usage live in the macOS menu bar.
 
@@ -20,8 +17,7 @@ No Electron. No browser extension. One command to install.
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Upstream: yagcioglutoprak/AIQuotaBar](https://img.shields.io/badge/upstream-yagcioglutoprak%2FAIQuotaBar-blue)](https://github.com/yagcioglutoprak/AIQuotaBar)
-[![Star the original](https://img.shields.io/github/stars/yagcioglutoprak/AIQuotaBar?style=social&label=Star%20the%20original)](https://github.com/yagcioglutoprak/AIQuotaBar/stargazers)
+[![Fork of yagcioglutoprak/AIQuotaBar](https://img.shields.io/badge/fork%20of-yagcioglutoprak%2FAIQuotaBar-blue)](https://github.com/yagcioglutoprak/AIQuotaBar)
 
 ---
 
@@ -34,10 +30,12 @@ curl -fsSL https://raw.githubusercontent.com/cagdasatici/AIQuotaLeft/main/instal
 
 **Homebrew:**
 ```bash
-brew tap yagcioglutoprak/aiquotabar
-brew install --HEAD aiquotabar
-aiquotabar &
+brew tap cagdasatici/aiquotaleft https://github.com/cagdasatici/AIQuotaLeft
+brew install --HEAD cagdasatici/aiquotaleft/aiquotaleft
+aiquotaleft &
 ```
+Homebrew installs the menu bar app only. The desktop widget needs Xcode — use the
+one-line installer above, or run `AIQuotaBarWidget/build_widget.sh` yourself.
 
 The app launches immediately and auto-detects your Claude, ChatGPT, Cursor, and Copilot sessions from Chrome, Arc, Brave, Edge, Firefox, or Safari — no copy-pasting cookies.
 
@@ -201,7 +199,7 @@ The app will try to auto-detect fresh cookies from your browser. If that fails, 
 
 ## Roadmap
 
-- [x] Homebrew tap (`brew tap yagcioglutoprak/aiquotabar && brew install --HEAD aiquotabar`)
+- [x] Homebrew tap (`brew tap cagdasatici/aiquotaleft https://github.com/cagdasatici/AIQuotaLeft`)
 - [x] Native macOS desktop widget (WidgetKit)
 - [x] Cursor IDE usage tracking (Auto + API)
 - [x] GitHub Copilot premium request tracking
@@ -222,13 +220,10 @@ PRs welcome. Open an issue first for large changes. See [Manual install](#manual
 
 ## Credits
 
-**Original project: [AIQuotaBar](https://github.com/yagcioglutoprak/AIQuotaBar) by
-[Toprak Yagcioglu](https://github.com/yagcioglutoprak)** — the menu bar app, every
-provider fetcher, the WidgetKit widget, the Homebrew formula and the installer are all
-his. This fork exists only because that project was good enough to build on.
-
-The MIT `LICENSE` and its copyright notice are kept unchanged. Please direct stars,
-issues and PRs upstream unless they're specific to the changes below.
+Built on [AIQuotaBar](https://github.com/yagcioglutoprak/AIQuotaBar) by
+[Toprak Yagcioglu](https://github.com/yagcioglutoprak) — the app, the provider
+fetchers, the widget and the installer are his, under MIT. Issues and PRs that
+aren't specific to the changes below belong upstream.
 
 ### Changes in this fork
 

@@ -101,10 +101,11 @@ echo "  ✓  Added to Login Items (runs at every login)"
 WIDGET_APP="/Applications/AIQuotaBarHost.app"
 WIDGET_INSTALLED=false
 
-if [ -d "$WIDGET_APP" ]; then
-    echo "  ✓  Desktop widget already installed"
-    WIDGET_INSTALLED=true
-elif command -v xcodebuild &>/dev/null && [ -d "$INSTALL_DIR/AIQuotaBarWidget/AIQuotaBarWidget.xcodeproj" ]; then
+if command -v xcodebuild &>/dev/null && [ -d "$INSTALL_DIR/AIQuotaBarWidget/AIQuotaBarWidget.xcodeproj" ]; then
+    # Always rebuild when Xcode is available, including over an existing
+    # install. Skipping when /Applications already has the app means an
+    # update never reaches the widget, leaving it to render stale code
+    # against a freshly updated menu bar app.
     echo "  ↓  Building desktop widget (Xcode found)…"
     if bash "$INSTALL_DIR/AIQuotaBarWidget/build_widget.sh"; then
         WIDGET_INSTALLED=true
@@ -116,8 +117,14 @@ else
     # reports quota USED - the opposite of what this fork exists to show - so
     # installing it here would silently contradict the menu bar. Build from
     # source instead; the menu bar app works fine without the widget.
-    echo "  ⊘  Widget: needs Xcode to build (non-fatal, skipping)"
-    echo "     Install Xcode, then: bash $INSTALL_DIR/AIQuotaBarWidget/build_widget.sh"
+    if [ -d "$WIDGET_APP" ]; then
+        echo "  ⚠  Widget: Xcode not found, keeping the existing build"
+        echo "     It may be older than the app you just installed."
+        WIDGET_INSTALLED=true
+    else
+        echo "  ⊘  Widget: needs Xcode to build (non-fatal, skipping)"
+        echo "     Install Xcode, then: bash $INSTALL_DIR/AIQuotaBarWidget/build_widget.sh"
+    fi
 fi
 
 if [ "$WIDGET_INSTALLED" = true ]; then

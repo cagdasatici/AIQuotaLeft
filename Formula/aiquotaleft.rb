@@ -1,10 +1,8 @@
-class Aiquotabar < Formula
-  desc "macOS menu bar app showing live Claude.ai and ChatGPT usage limits"
-  homepage "https://github.com/yagcioglutoprak/AIQuotaBar"
-  url "https://github.com/yagcioglutoprak/AIQuotaBar/archive/refs/tags/v1.1.0.tar.gz"
-  sha256 "9c875f01e4891e4483640abcf1447e172dcf66ddfc49f46df91187ea19c4f5ff"
+class Aiquotaleft < Formula
+  desc "Menu bar app showing AI quota remaining for Claude, ChatGPT, Cursor, Copilot"
+  homepage "https://github.com/cagdasatici/AIQuotaLeft"
   license "MIT"
-  head "https://github.com/yagcioglutoprak/AIQuotaBar.git", branch: "main"
+  head "https://github.com/cagdasatici/AIQuotaLeft.git", branch: "main"
 
   depends_on macos: :monterey
   depends_on "python@3.12"
@@ -72,7 +70,11 @@ class Aiquotabar < Formula
       end
     end
 
+    # claude_bar.py is only a shim: it does `from aiquotabar.__main__ import
+    # main`, so the package has to ship with it or the launcher dies with
+    # ModuleNotFoundError at runtime.
     libexec.install "claude_bar.py"
+    libexec.install "aiquotabar"
     (libexec/"assets").install Dir["assets/*"]
 
     # Fix rumps notification crash (requires CFBundleIdentifier in Info.plist)
@@ -82,25 +84,32 @@ class Aiquotabar < Formula
              "Add :CFBundleIdentifier string rumps", plist_path.to_s
     end
 
-    (bin/"aiquotabar").write <<~SH
+    (bin/"aiquotaleft").write <<~SH
       #!/bin/bash
       exec "#{venv}/bin/python" "#{libexec}/claude_bar.py" "$@"
     SH
-    chmod 0755, bin/"aiquotabar"
+    chmod 0755, bin/"aiquotaleft"
   end
 
   def caveats
     <<~EOS
-      AIQuotaBar is a macOS menu bar app. Launch it with:
-        aiquotabar &
+      AIQuotaLeft is a macOS menu bar app. Launch it with:
+        aiquotaleft &
 
-      To run it at login, click the ◆ icon in your menu bar → Launch at Login.
+      To run it at login, click the diamond icon in your menu bar -> Launch at Login.
+
+      The desktop widget is not installed by Homebrew. It needs Xcode:
+        git clone https://github.com/cagdasatici/AIQuotaLeft.git
+        bash AIQuotaLeft/AIQuotaBarWidget/build_widget.sh
 
       Logs are written to: ~/.claude_bar.log
     EOS
   end
 
   test do
-    system "#{libexec}/venv/bin/python", "-m", "py_compile", "#{libexec}/claude_bar.py"
+    # Import the package rather than only byte-compiling the shim - a
+    # py_compile check passes even when the package is missing entirely.
+    ENV["PYTHONPATH"] = libexec
+    system "#{libexec}/venv/bin/python", "-c", "import aiquotabar, aiquotabar.__main__"
   end
 end
