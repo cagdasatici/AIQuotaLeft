@@ -69,6 +69,14 @@ echo "  ↓  Installing to $INSTALL_PATH…"
 rm -rf "$INSTALL_PATH"
 cp -R "$BUILT_APP" "$INSTALL_PATH"
 
+# Drop the build-directory copy from LaunchServices. Both copies share the
+# bundle id, and if the build copy stays registered the system can host the
+# widget from there instead of /Applications - which silently serves stale
+# code and makes the installed app look broken.
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+"$LSREGISTER" -u "$BUILT_APP" 2>/dev/null || true
+"$LSREGISTER" -f "$INSTALL_PATH" 2>/dev/null || true
+
 # Launch once to register the widget with the system
 open "$INSTALL_PATH"
 sleep 2

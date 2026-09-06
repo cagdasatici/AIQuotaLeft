@@ -93,17 +93,17 @@ struct MediumWidgetView: View {
                     .font(.system(size: 12))
                     .lineLimit(1)
                 Spacer(minLength: 4)
-                Text("\(row.pct)%")
+                Text("\(row.remainingPct)%")
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(colorForPct(row.pct, accent: accent))
+                    .foregroundStyle(colorForRemaining(row.remainingPct, accent: accent))
             }
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(.quaternary)
                     Capsule()
-                        .fill(colorForPct(row.pct, accent: accent).opacity(0.85))
-                        .frame(width: max(2, geo.size.width * CGFloat(row.pct) / 100))
+                        .fill(colorForRemaining(row.remainingPct, accent: accent).opacity(0.85))
+                        .frame(width: max(2, geo.size.width * CGFloat(row.remainingPct) / 100))
                 }
             }
             .frame(height: 4)
@@ -126,9 +126,9 @@ struct MediumWidgetView: View {
         }
     }
 
-    private func colorForPct(_ pct: Int, accent: Color) -> Color {
-        if pct >= 95 { return .red }
-        if pct >= 80 { return .orange }
+    private func colorForRemaining(_ remaining: Int, accent: Color) -> Color {
+        if remaining <= 5 { return .red }
+        if remaining <= 20 { return .orange }
         return accent
     }
 }

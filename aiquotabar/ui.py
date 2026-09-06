@@ -2784,7 +2784,7 @@ class ClaudeBar(rumps.App):
                     s.appendAttributedString_(seg)
 
                 s.appendAttributedString_(
-                    NSAttributedString.alloc().initWithString_attributes_(f" {pct}%{suffix}", base)
+                    NSAttributedString.alloc().initWithString_attributes_(f" {100 - pct}%{suffix}", base)
                 )
 
             # -- Claude Code  diamond 3.2k --
@@ -2805,7 +2805,7 @@ class ClaudeBar(rumps.App):
         for name, pct, suffix in provider_segments:
             cfg = self._BAR_PROVIDERS.get(name, {})
             sym = cfg.get("sym", "\u25cf")
-            parts.append(f"{sym} {pct}%{suffix}")
+            parts.append(f"{sym} {100 - pct}%{suffix}")
         if cc_msgs is not None and cc_msgs > 0:
             parts.append(f"\u25c6 {_fmt_count(cc_msgs)}")
         self.title = "  ".join(parts)

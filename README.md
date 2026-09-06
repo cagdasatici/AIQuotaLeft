@@ -1,5 +1,11 @@
 # AIQuotaBar
 
+> **This is a personal fork of [AIQuotaBar by Toprak Yagcioglu](https://github.com/yagcioglutoprak/AIQuotaBar).**
+> Nearly all of this — the menu bar app, the provider fetchers, the widget, the install
+> tooling — is his work, under MIT. This fork adds a few personal changes (see
+> [Changes in this fork](#changes-in-this-fork)). If you want the real thing, star the
+> [original repo](https://github.com/yagcioglutoprak/AIQuotaBar).
+
 **Stop getting rate-limited by surprise.** See your Claude, ChatGPT, Cursor, and Copilot usage live in the macOS menu bar.
 
 No Electron. No browser extension. One command to install.
@@ -12,9 +18,8 @@ No Electron. No browser extension. One command to install.
 </p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/yagcioglutoprak/AIQuotaBar?style=social)](https://github.com/yagcioglutoprak/AIQuotaBar/stargazers)
-[![Downloads](https://img.shields.io/github/downloads/yagcioglutoprak/AIQuotaBar/total)](https://github.com/yagcioglutoprak/AIQuotaBar/releases)
-[![Latest Release](https://img.shields.io/github/v/release/yagcioglutoprak/AIQuotaBar)](https://github.com/yagcioglutoprak/AIQuotaBar/releases/latest)
+[![Upstream: yagcioglutoprak/AIQuotaBar](https://img.shields.io/badge/upstream-yagcioglutoprak%2FAIQuotaBar-blue)](https://github.com/yagcioglutoprak/AIQuotaBar)
+[![Star the original](https://img.shields.io/github/stars/yagcioglutoprak/AIQuotaBar?style=social&label=Star%20the%20original)](https://github.com/yagcioglutoprak/AIQuotaBar/stargazers)
 
 ---
 
@@ -213,9 +218,29 @@ PRs welcome. Open an issue first for large changes. See [Manual install](#manual
 
 ---
 
+## Credits
+
+**Original project: [AIQuotaBar](https://github.com/yagcioglutoprak/AIQuotaBar) by
+[Toprak Yagcioglu](https://github.com/yagcioglutoprak)** — the menu bar app, every
+provider fetcher, the WidgetKit widget, the Homebrew formula and the installer are all
+his. This fork exists only because that project was good enough to build on.
+
+The MIT `LICENSE` and its copyright notice are kept unchanged. Please direct stars,
+issues and PRs upstream unless they're specific to the changes below.
+
+### Changes in this fork
+
+- Menu bar and widget show quota **remaining** instead of used.
+- Widget colour thresholds inverted to match (red/orange now mean *nearly out*).
+- Widget progress bars drain as quota is consumed.
+- Widget config intent no longer relies on an ambiguous `AIProvider.none`, which could
+  compile to `Optional.none` and leave the widget blank.
+- `build_widget.sh` drops the build-directory copy from LaunchServices, so the system
+  can't host the widget from a stale build instead of `/Applications`.
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Toprak Yagcioglu.
 
 ## Disclaimer
 

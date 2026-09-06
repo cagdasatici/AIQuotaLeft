@@ -89,6 +89,9 @@ struct LimitRow: Codable {
         case label, pct
         case resetStr = "reset_str"
     }
+
+    /// Quota left. `pct` from usage.json is the amount used; the UI shows remaining.
+    var remainingPct: Int { max(0, min(100, 100 - pct)) }
 }
 
 // MARK: - File reading

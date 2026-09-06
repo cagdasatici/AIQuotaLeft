@@ -30,11 +30,19 @@ struct SmallWidgetView: View {
     private func providerGauge(snap: UsageSnapshot, provider: AIProvider,
                                iconSize: CGFloat, fontSize: CGFloat) -> some View {
         let data = provider.displayData(from: snap)
+        // No usable reading: show a dash, never "100%" left.
+        let hasReading = data.isConfigured && data.error == nil
         return VStack(spacing: 6) {
             providerIcon(provider, size: iconSize)
-            Text("\(data.mainPct)%")
-                .font(.system(size: fontSize, weight: .medium, design: .rounded))
-                .foregroundStyle(colorForPct(data.mainPct, accent: provider.color))
+            if hasReading {
+                Text("\(data.mainRemainingPct)%")
+                    .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                    .foregroundStyle(colorForRemaining(data.mainRemainingPct, accent: provider.color))
+            } else {
+                Text("\u{2014}")
+                    .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -66,9 +74,9 @@ struct SmallWidgetView: View {
         }
     }
 
-    private func colorForPct(_ pct: Int, accent: Color) -> Color {
-        if pct >= 95 { return .red }
-        if pct >= 80 { return .orange }
+    private func colorForRemaining(_ remaining: Int, accent: Color) -> Color {
+        if remaining <= 5 { return .red }
+        if remaining <= 20 { return .orange }
         return accent
     }
 }

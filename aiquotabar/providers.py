@@ -362,7 +362,6 @@ def fetch_glm(api_key: str) -> ProviderData:
         return ProviderData("GLM (Zhipu)", error=str(e)[:80])
 
 
-def fetch_copilot(cookie_str: str) -> ProviderData:
     """Fetch GitHub Copilot premium request usage via browser cookies."""
     cookies = parse_cookie_string(cookie_str)
     try:
@@ -386,7 +385,6 @@ def fetch_copilot(cookie_str: str) -> ProviderData:
             currency="", period="this month",
         )
     except Exception as e:
-        log.debug("fetch_copilot failed: %s", e)
         return ProviderData("Copilot", error=str(e)[:80])
 
 
@@ -444,7 +442,6 @@ def fetch_cursor(cookie_str: str) -> ProviderData:
 # others are API key-based.
 PROVIDER_REGISTRY: dict[str, tuple[str, callable]] = {
     "chatgpt_cookies": ("ChatGPT",     fetch_chatgpt),
-    "copilot_cookies": ("Copilot",     fetch_copilot),
     "cursor_cookies":  ("Cursor",      fetch_cursor),
     "openai_key":      ("OpenAI",      fetch_openai),
     "minimax_key":     ("MiniMax",     fetch_minimax),
