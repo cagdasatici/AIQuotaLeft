@@ -1,10 +1,12 @@
-# AIQuotaBar
+# AIQuotaLeft
 
 > **This is a personal fork of [AIQuotaBar by Toprak Yagcioglu](https://github.com/yagcioglutoprak/AIQuotaBar).**
 > Nearly all of this — the menu bar app, the provider fetchers, the widget, the install
-> tooling — is his work, under MIT. This fork adds a few personal changes (see
-> [Changes in this fork](#changes-in-this-fork)). If you want the real thing, star the
-> [original repo](https://github.com/yagcioglutoprak/AIQuotaBar).
+> tooling — is his work, under MIT. AIQuotaLeft renames only to stay out of his way: it
+> is **not** an official next version of AIQuotaBar. The difference is in the name — it
+> reports what you have **left** rather than what you have used (see
+> [Changes in this fork](#changes-in-this-fork)). If you want the original, star the
+> [upstream repo](https://github.com/yagcioglutoprak/AIQuotaBar).
 
 **Stop getting rate-limited by surprise.** See your Claude, ChatGPT, Cursor, and Copilot usage live in the macOS menu bar.
 
@@ -27,7 +29,7 @@ No Electron. No browser extension. One command to install.
 
 **One-line (recommended):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yagcioglutoprak/AIQuotaBar/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cagdasatici/AIQuotaLeft/main/install.sh | bash
 ```
 
 **Homebrew:**
@@ -159,7 +161,7 @@ cd AIQuotaBarWidget && ./build_widget.sh
 ## Manual install
 
 ```bash
-git clone https://github.com/yagcioglutoprak/AIQuotaBar.git
+git clone https://github.com/cagdasatici/AIQuotaLeft.git
 cd AIQuotaBar
 pip install -r requirements.txt
 python3 claude_bar.py

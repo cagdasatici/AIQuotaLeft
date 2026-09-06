@@ -1,10 +1,10 @@
 #!/bin/bash
 # AIQuotaBar — one-line installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/yagcioglutoprak/AIQuotaBar/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/cagdasatici/AIQuotaLeft/main/install.sh | bash
 
 set -e
 
-REPO="https://github.com/yagcioglutoprak/AIQuotaBar"
+REPO="https://github.com/cagdasatici/AIQuotaLeft"
 INSTALL_DIR="$HOME/.ai-quota-bar"
 VENV_DIR="$INSTALL_DIR/.venv"
 PLIST="$HOME/Library/LaunchAgents/com.claudebar.plist"
@@ -112,24 +112,12 @@ elif command -v xcodebuild &>/dev/null && [ -d "$INSTALL_DIR/AIQuotaBarWidget/AI
         echo "  ⚠  Widget build failed (non-fatal)"
     fi
 else
-    echo "  ↓  Installing pre-built desktop widget…"
-    WIDGET_URL="https://github.com/yagcioglutoprak/AIQuotaBar/releases/latest/download/AIQuotaBarWidget.zip"
-    WIDGET_TMP="/tmp/AIQuotaBarWidget_$$.zip"
-    if curl -fsSL -o "$WIDGET_TMP" "$WIDGET_URL" 2>/dev/null; then
-        rm -rf "$WIDGET_APP"
-        ditto -x -k "$WIDGET_TMP" /Applications/
-        xattr -dr com.apple.quarantine "$WIDGET_APP" 2>/dev/null || true
-        rm -f "$WIDGET_TMP"
-        # Launch once to register widget with the system
-        open "$WIDGET_APP"
-        sleep 2
-        osascript -e 'quit app "AIQuotaBarHost"' 2>/dev/null || true
-        echo "  ✓  Desktop widget installed"
-        WIDGET_INSTALLED=true
-    else
-        echo "  ⊘  Widget: download failed (non-fatal, skipping)"
-        rm -f "$WIDGET_TMP"
-    fi
+    # No pre-built widget for this fork. Upstream ships one, but that build
+    # reports quota USED - the opposite of what this fork exists to show - so
+    # installing it here would silently contradict the menu bar. Build from
+    # source instead; the menu bar app works fine without the widget.
+    echo "  ⊘  Widget: needs Xcode to build (non-fatal, skipping)"
+    echo "     Install Xcode, then: bash $INSTALL_DIR/AIQuotaBarWidget/build_widget.sh"
 fi
 
 if [ "$WIDGET_INSTALLED" = true ]; then
@@ -147,7 +135,7 @@ echo "  Look for the ◆ icon in your menu bar."
 echo "  It will auto-detect your Claude session from your browser."
 echo ""
 echo "  ─────────────────────────────────────────────────"
-echo "  ⭐ If you find this useful, star the repo!"
+echo "  ⭐ AIQuotaLeft is a fork. Star the original:"
 echo "     https://github.com/yagcioglutoprak/AIQuotaBar"
 echo "  ─────────────────────────────────────────────────"
 echo ""
