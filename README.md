@@ -9,12 +9,11 @@
 
 No Electron. No browser extension. One command to install.
 
-<p align="center">
-<img src="assets/demo.gif" alt="Menu Bar" width="380">
-</p>
-<p align="center">
-<img src="assets/widget_info.gif" alt="Desktop Widget" width="600">
-</p>
+<!-- The demo recordings inherited from upstream show quota USED - bars filling
+     as quota is consumed - which is the opposite of what this fork displays.
+     Rather than illustrate the wrong behaviour, they are omitted until
+     re-recorded. The sample menu under "What it shows" is accurate: its
+     numbers and bar widths are taken from real rendered output. -->
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Fork of yagcioglutoprak/AIQuotaBar](https://img.shields.io/badge/fork%20of-yagcioglutoprak%2FAIQuotaBar-blue)](https://github.com/yagcioglutoprak/AIQuotaBar)
