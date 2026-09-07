@@ -10,8 +10,8 @@ settings:
   base:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.9"
-    MARKETING_VERSION: "1.1"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "1.2"
+    CURRENT_PROJECT_VERSION: "3"
 
 targets:
   AIQuotaBarHost:
@@ -27,8 +27,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: AIQuotaBarHost/AIQuotaBarHost.entitlements
         INFOPLIST_KEY_LSUIElement: true
         GENERATE_INFOPLIST_FILE: "YES"
-        MARKETING_VERSION: "1.1"
-        CURRENT_PROJECT_VERSION: "2"
+        MARKETING_VERSION: "1.2"
+        CURRENT_PROJECT_VERSION: "3"
     dependencies:
       - target: AIQuotaBarWidgetExtension
         embed: true
