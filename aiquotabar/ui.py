@@ -573,7 +573,7 @@ def _show_history_window(conn) -> None:
             g = 0.14 + t * 0.33
             b = 0.20 + t * 0.14
             cc = Quartz.CGColorCreateGenericRGB(r, g, b, 1.0)
-            tip = f"{ds}  \u2013  Peak {pct}%"
+            tip = f"{ds}  \u2013  Peak usage {pct}%"
 
         tag = tag_counter[0]
         tag_counter[0] += 1
@@ -629,7 +629,7 @@ def _show_history_window(conn) -> None:
     for key, stats in sorted(today_detail.items()):
         lbl_name = (key.replace("_", " ").title()
                     .replace("Chatgpt", "ChatGPT").replace("Api", "API"))
-        info_parts.append(f"{lbl_name} {stats['avg_pct']}%")
+        info_parts.append(f"{lbl_name} {stats['avg_pct']}% used")
     initial_info = (f"{_fmt_date_label(today_str)}  \u2014  "
                     + "  \u00b7  ".join(info_parts)) if info_parts else "Click a cell to see day details"
 
@@ -647,7 +647,7 @@ def _show_history_window(conn) -> None:
             for key, stats in sorted(detail.items()):
                 name = (key.replace("_", " ").title()
                         .replace("Chatgpt", "ChatGPT").replace("Api", "API"))
-                parts.append(f"{name} {stats['avg_pct']}%")
+                parts.append(f"{name} {stats['avg_pct']}% used")
             text = f"{_fmt_date_label(ds)}  \u2014  "
             text += "  \u00b7  ".join(parts) if parts else "No data"
             info_label.setStringValue_(text)
@@ -699,7 +699,7 @@ def _show_history_window(conn) -> None:
         y += 22
 
         # Summary
-        stxt = f"Avg {prov['avg']}%  \u00b7  Peak {prov['peak']}%"
+        stxt = f"Avg {prov['avg']}% used  \u00b7  Peak {prov['peak']}% used"
         if prov["hits"] > 0:
             stxt += f"  \u00b7  Hit limit {prov['hits']}x"
         _lbl(doc, stxt, PAD, y, inner_w, size=11, color=dim)
@@ -770,6 +770,15 @@ def _fmt_count(n: int) -> str:
     return str(n)
 
 
+def _remaining(pct: int) -> int:
+    """Providers report percent USED; every user-facing gauge shows what's left.
+
+    Kept as a single conversion point: usage stays the internal unit, so alert
+    thresholds and history keep working, and only the display inverts.
+    """
+    return max(0, min(100, 100 - pct))
+
+
 def _bar(pct: int, width: int = 14) -> str:
     filled = round(pct / 100 * width)
     return "\u2588" * filled + "\u2591" * (width - filled)
@@ -784,8 +793,9 @@ def _status_icon(pct: int) -> str:
 
 
 def _row_lines(row: LimitRow) -> list[str]:
-    bar = _bar(row.pct)
-    line1 = f"  {row.label}  {row.pct}%"
+    left = _remaining(row.pct)
+    bar = _bar(left)
+    line1 = f"  {row.label}  {left}% left"
     line2 = f"  {bar}  {row.reset_str}" if row.reset_str else f"  {bar}"
     return [line1, line2]
 
@@ -806,9 +816,10 @@ def _provider_lines(pd: ProviderData) -> list[str]:
     # Standard spending / balance format
     lines = []
     if pd.pct is not None:
-        bar = _bar(pd.pct)
+        left = _remaining(pd.pct)
+        bar = _bar(left)
         lines.append(f"  {sym}{pd.spent:.2f} / {sym}{pd.limit:.2f} {pd.period}")
-        lines.append(f"  {bar}  {pd.pct}%")
+        lines.append(f"  {bar}  {left}% left")
     elif pd.balance is not None:
         lines.append(f"  {sym}{pd.balance:.2f} remaining")
     elif pd.spent is not None:
@@ -1280,16 +1291,16 @@ class _SharePopover:
             parts = []
             data = self.app._last_data
             if data and data.session:
-                parts.append(f"Claude {data.session.pct}%")
+                parts.append(f"Claude {_remaining(data.session.pct)}% left")
             for pd in self.app._provider_data:
                 if pd.error:
                     continue
                 if pd._rows:
                     best = max(r.pct for r in pd._rows if r.pct is not None) if pd._rows else None
                     if best is not None:
-                        parts.append(f"{pd.name} {best}%")
+                        parts.append(f"{pd.name} {_remaining(best)}% left")
                 elif pd.pct is not None:
-                    parts.append(f"{pd.name} {pd.pct}%")
+                    parts.append(f"{pd.name} {_remaining(pd.pct)}% left")
 
             stats = " \u00b7 ".join(parts) if parts else "my AI usage"
             text = f"{stats} \u2014 tracking with AIQuotaBar"
@@ -1852,8 +1863,9 @@ class _UsagePanel:
         track.layer().setMasksToBounds_(True)
         parent.addSubview_(track)
 
-        # Fill
-        fill_w = max(0, bar_w * row.pct / 100)
+        # Fill: the bar shows what remains, so it drains as quota is consumed.
+        left = _remaining(row.pct)
+        fill_w = max(0, bar_w * left / 100)
         if fill_w > 0:
             fill = NSView.alloc().initWithFrame_(NSMakeRect(bar_x, bar_y, fill_w, self.PROGRESS_H))
             fill.setWantsLayer_(True)
@@ -1866,7 +1878,7 @@ class _UsagePanel:
 
         # Percentage text
         pct_lbl = NSTextField.alloc().initWithFrame_(NSMakeRect(x + w - pct_w, y, pct_w, h))
-        pct_lbl.setStringValue_(f"{row.pct}%")
+        pct_lbl.setStringValue_(f"{left}%")
         pct_lbl.setBezeled_(False)
         pct_lbl.setDrawsBackground_(False)
         pct_lbl.setEditable_(False)
@@ -2618,7 +2630,7 @@ class ClaudeBar(rumps.App):
                 _notify(
                     "Claude Usage Bar \u2705",
                     f"{row.label} has reset!",
-                    f"Now at {row.pct}% \u2014 you're good to go.",
+                    f"{_remaining(row.pct)}% left \u2014 you're good to go.",
                 )
 
             if warn_enabled:
@@ -2626,14 +2638,14 @@ class ClaudeBar(rumps.App):
                     self._warned_pcts.add(crit_key)
                     _notify(
                         "Claude Usage Bar \U0001f534",
-                        f"{row.label} is at {row.pct}%!",
+                        f"{row.label}: only {_remaining(row.pct)}% left!",
                         row.reset_str or "Limit almost reached",
                     )
                 elif row.pct >= WARN_THRESHOLD and warn_key not in self._warned_pcts:
                     self._warned_pcts.add(warn_key)
                     _notify(
                         "Claude Usage Bar \U0001f7e1",
-                        f"{row.label} is at {row.pct}%",
+                        f"{row.label}: {_remaining(row.pct)}% left",
                         row.reset_str or "Approaching limit",
                     )
                 elif row.pct < WARN_THRESHOLD:
@@ -2671,7 +2683,7 @@ class ClaudeBar(rumps.App):
                     _notify(
                         "Claude Usage Bar \u2705",
                         f"{pname} {row.label} has reset!",
-                        f"Now at {row.pct}% \u2014 you're good to go.",
+                        f"{_remaining(row.pct)}% left \u2014 you're good to go.",
                     )
 
                 if warn_enabled:
@@ -2679,14 +2691,14 @@ class ClaudeBar(rumps.App):
                         self._warned_pcts.add(crit_key)
                         _notify(
                             "Claude Usage Bar \U0001f534",
-                            f"{pname} {row.label} is at {row.pct}%!",
+                            f"{pname} {row.label}: only {_remaining(row.pct)}% left!",
                             row.reset_str or "Limit almost reached",
                         )
                     elif row.pct >= WARN_THRESHOLD and warn_key not in self._warned_pcts:
                         self._warned_pcts.add(warn_key)
                         _notify(
                             "Claude Usage Bar \U0001f7e1",
-                            f"{pname} {row.label} is at {row.pct}%",
+                            f"{pname} {row.label}: {_remaining(row.pct)}% left",
                             row.reset_str or "Approaching limit",
                         )
                     elif row.pct < WARN_THRESHOLD:
@@ -2784,7 +2796,8 @@ class ClaudeBar(rumps.App):
                     s.appendAttributedString_(seg)
 
                 s.appendAttributedString_(
-                    NSAttributedString.alloc().initWithString_attributes_(f" {100 - pct}%{suffix}", base)
+                    NSAttributedString.alloc().initWithString_attributes_(
+                        f" {_remaining(pct)}%{suffix}", base)
                 )
 
             # -- Claude Code  diamond 3.2k --
@@ -2805,7 +2818,7 @@ class ClaudeBar(rumps.App):
         for name, pct, suffix in provider_segments:
             cfg = self._BAR_PROVIDERS.get(name, {})
             sym = cfg.get("sym", "\u25cf")
-            parts.append(f"{sym} {100 - pct}%{suffix}")
+            parts.append(f"{sym} {_remaining(pct)}%{suffix}")
         if cc_msgs is not None and cc_msgs > 0:
             parts.append(f"\u25c6 {_fmt_count(cc_msgs)}")
         self.title = "  ".join(parts)
@@ -2930,7 +2943,7 @@ class ClaudeBar(rumps.App):
             pct = int(data.session.pct)
             icon = _status_icon(pct)
             text = (
-                f"I'm at {pct}% of my Claude session limit {icon}\n"
+                f"I've got {_remaining(pct)}% of my Claude session limit left {icon}\n"
                 f"Tracking Claude + ChatGPT + Cursor usage live in my macOS menu bar "
                 f"\u2014 zero setup, auto-detects from browser\n"
                 f"github.com/yagcioglutoprak/AIQuotaBar"

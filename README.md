@@ -5,7 +5,7 @@
 > entirely is. It reports what you have **left** rather than what you have used —
 > see [Changes in this fork](#changes-in-this-fork). Not an official AIQuotaBar release.
 
-**Stop getting rate-limited by surprise.** See your Claude, ChatGPT, Cursor, and Copilot usage live in the macOS menu bar.
+**Stop getting rate-limited by surprise.** See how much Claude, ChatGPT, Cursor, and Copilot quota you have **left**, live in the macOS menu bar.
 
 No Electron. No browser extension. One command to install.
 
@@ -49,12 +49,15 @@ I kept getting cut off mid-session on Claude Pro with zero warning. Claude.ai do
 
 ## What it shows
 
+Every percentage is **quota remaining**, not quota used. 100% means a full
+tank; 0% means you're out.
+
 | Menu bar | Meaning |
 |---|---|
-| 🟢 12% | Session usage is low — you're good |
-| 🟡 83% | Approaching the 5-hour limit |
-| 🔴 100% | Rate-limited — shows time until reset |
-| 🔴 100% · | Session is fine but weekly limit is maxed |
+| 🟢 88% | Plenty of session quota left — you're good |
+| 🟡 17% | Running low — approaching the 5-hour limit |
+| 🔴 0% | Rate-limited — shows time until reset |
+| 🔴 0% · | Session is fine but weekly quota is gone |
 
 Open the menu for full detail:
 
@@ -62,36 +65,36 @@ Open the menu for full detail:
 CLAUDE
 
   🟢 Current Session
-  ██░░░░░░░░░░░░  12%
+  ████████████░░  88% left
   resets in 3h 41m
 
   🟡 All Models
-  ████████████░░  83%
+  ██░░░░░░░░░░░░  17% left
   resets Wed 23:00
 
   🟢 Sonnet Only
-  ███░░░░░░░░░░░  22%
+  ███████████░░░  78% left
   resets Wed 23:00
 
 CHATGPT
 
   🟢 Codex Tasks
-  █░░░░░░░░░░░░░  0%
+  ██████████████  100% left
   resets Thu 05:38
 
 GITHUB COPILOT
 
   0 / 300 this month
-  █░░░░░░░░░░░░░  0%
+  ██████████████  100% left
 
 CURSOR
 
   🟢 Auto
-  █░░░░░░░░░░░░░  0%
+  ██████████████  100% left
   resets in 27d
 
   🟢 API
-  █░░░░░░░░░░░░░  0%
+  ██████████████  100% left
   resets in 27d
 ```
 
@@ -99,7 +102,7 @@ CURSOR
 
 ## Desktop Widget (NEW)
 
-Native macOS WidgetKit widget — see your AI usage right on your desktop or in Notification Center.
+Native macOS WidgetKit widget — see how much AI quota you have left, right on your desktop or in Notification Center.
 
 **Small widget:** Claude + ChatGPT percentages at a glance, color-coded by brand.
 
@@ -126,7 +129,7 @@ cd AIQuotaBarWidget && ./build_widget.sh
 - **Burn rate + ETA** — predicts when you'll hit each limit based on your current pace
 - **Pacing alerts** — notifies you when you're on track to hit a limit within 30 minutes
 - **Auto-refresh on session expiry** — silently grabs fresh cookies when your session expires
-- **macOS notifications** — alerts at 80% and 95% usage for Claude, ChatGPT, and Cursor
+- **macOS notifications** — alerts when you drop to 20% and 5% remaining for Claude, ChatGPT, and Cursor
 - **Configurable refresh** — 1 / 5 / 15 min
 - **Runs at login** — via LaunchAgent, toggle from the menu
 - **Tiny footprint** — single-file Python app, no Electron, no background services beyond the app itself
@@ -138,7 +141,7 @@ cd AIQuotaBarWidget && ./build_widget.sh
 | | AIQuotaBar | Open settings page | Browser extension |
 |---|---|---|---|
 | Always visible | ✅ Menu bar + desktop widget | ❌ Manual tab switch | ⚠️ Badge only |
-| Notifications | ✅ 80% + 95% + pacing alerts | ❌ None | ⚠️ Varies |
+| Notifications | ✅ 20% + 5% left + pacing alerts | ❌ None | ⚠️ Varies |
 | Claude + ChatGPT + Cursor + Copilot | ✅ All in one place | ❌ One at a time | ❌ |
 | Desktop widget | ✅ Native WidgetKit | ❌ | ❌ |
 | Privacy | ✅ Local only | ✅ | ⚠️ Depends on extension |
