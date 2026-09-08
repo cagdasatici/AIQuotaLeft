@@ -79,11 +79,11 @@ cat > "$PLIST" <<PLIST_EOF
     </array>
     <key>RunAtLoad</key>
     <true/>
+    <!-- Restart on any exit. SuccessfulExit:false respawns only after a
+         crash, so a clean exit left the app dead until the next login. The
+         Quit menu item unloads this job first, so quitting still works. -->
     <key>KeepAlive</key>
-    <dict>
-        <key>SuccessfulExit</key>
-        <false/>
-    </dict>
+    <true/>
     <key>StandardOutPath</key>
     <string>$HOME/.claude_bar.log</string>
     <key>StandardErrorPath</key>
@@ -142,6 +142,18 @@ echo "  Look for the ◆ icon in your menu bar."
 echo "  It will auto-detect your Claude session from your browser."
 echo ""
 echo "  ─────────────────────────────────────────────────"
+# Verify and repair everything before declaring success: agents supervised,
+# watchdog installed, widget host running, no stale bundle registrations.
+if [ -f "$INSTALL_DIR/aiquotaleft-doctor.sh" ]; then
+    bash "$INSTALL_DIR/aiquotaleft-doctor.sh" || true
+fi
+
+# Dock launcher: restarts the menu bar app and repairs anything that drifted.
+if [ -f "$INSTALL_DIR/make_dock_launcher.sh" ]; then
+    bash "$INSTALL_DIR/make_dock_launcher.sh" >/dev/null 2>&1 \
+        && echo "  ✓  Dock launcher: /Applications/Restart AIQuotaLeft.app"
+fi
+
 echo "  ⭐ AIQuotaLeft is a fork. Star the original:"
 echo "     https://github.com/yagcioglutoprak/AIQuotaBar"
 echo "  ─────────────────────────────────────────────────"

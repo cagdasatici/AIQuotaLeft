@@ -6,7 +6,7 @@
 # error -10669. osacompile produces a bundle with a real Mach-O executable.
 set -e
 APP_NAME="Restart AIQuotaLeft"
-DEST="${1:-$HOME/Applications}"
+DEST="${1:-/Applications}"
 APP="$DEST/$APP_NAME.app"
 SRC_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRIPT="$SRC_DIR/restart_aiquotaleft.sh"

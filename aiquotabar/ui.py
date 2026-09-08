@@ -941,11 +941,13 @@ def _add_login_item():
         "Label": "com.claudebar",
         "ProgramArguments": [python_exe, path],
         "RunAtLoad": True,
-        # Respawn only on an abnormal exit (crash / killed by signal); a
-        # clean Quit (exit 0) stays quit. _restart_app() uses os.execv, which
-        # replaces the process in place (same PID, no exit), so the
-        # self-updater never trips a launchd respawn.
-        "KeepAlive": {"SuccessfulExit": False},
+        # Restart on ANY exit. This used to be {"SuccessfulExit": False}, which
+        # respawns only after a crash - so any clean exit left the app dead
+        # until the next login, with nothing reporting that it had gone.
+        # Quit still works: _quit_app() unloads this job first, so launchd has
+        # nothing to respawn. _restart_app() uses os.execv, which replaces the
+        # process in place without exiting, so it never trips a respawn either.
+        "KeepAlive": True,
         "StandardOutPath": os.path.expanduser("~/.claude_bar.log"),
         "StandardErrorPath": os.path.expanduser("~/.claude_bar.log"),
     }
@@ -954,6 +956,24 @@ def _add_login_item():
     result = subprocess.run(["launchctl", "load", plist], capture_output=True)
     if result.returncode != 0:
         log.warning("launchctl load failed: %s", result.stderr.decode(errors="replace"))
+
+
+def _quit_app(_sender=None):
+    """Quit for real.
+
+    The launch agent is KeepAlive, so simply exiting would be undone within
+    seconds. Unload the job first; launchd then has nothing to respawn. The
+    plist stays on disk, so it starts again at the next login - and the Dock
+    launcher or the doctor can bring it back before then.
+    """
+    try:
+        subprocess.run(
+            ["launchctl", "bootout", f"gui/{os.getuid()}/com.claudebar"],
+            capture_output=True,
+        )
+    except Exception:
+        log.debug("bootout on quit failed", exc_info=True)
+    rumps.quit_application()
 
 
 def _remove_login_item():
@@ -2286,7 +2306,7 @@ class ClaudeBar(rumps.App):
         items.append(widget_item)
 
         items.append(None)
-        items.append(rumps.MenuItem("Quit", callback=rumps.quit_application))
+        items.append(rumps.MenuItem("Quit", callback=_quit_app))
 
         self.menu.clear()
         self.menu = items
