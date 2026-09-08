@@ -107,10 +107,13 @@ LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 "$LSREGISTER" -u "$BUILT_APP" 2>/dev/null || true
 "$LSREGISTER" -f "$INSTALL_PATH" 2>/dev/null || true
 
-# Launch once to register the widget with the system
-open "$INSTALL_PATH"
+# Launch, and leave it running. Besides registering the widget, the host
+# watches usage.json and asks WidgetKit to refresh when the menu bar app
+# writes new data. Quitting it freezes the widget on whatever it last drew:
+# a widget's own timeline policy is only a request, and the system throttles
+# it into hours.
+open -g -j "$INSTALL_PATH"
 sleep 2
-osascript -e 'quit app "AIQuotaBarHost"' 2>/dev/null || true
 
 echo "  ✓  Widget installed!"
 echo ""

@@ -119,11 +119,13 @@ def _write_widget_cache(
         os.replace(tmp, WIDGET_CACHE_FILE)
         log.debug("widget cache written: %s", WIDGET_CACHE_FILE)
 
-        # Nudge WidgetKit to reload (non-blocking, best-effort)
-        subprocess.Popen(
-            ["open", "-g", "-a", "AIQuotaBarHost", "--args", "--reload-widget"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
+        # The host watches this directory and refreshes the widget when a new
+        # file lands, so all that is needed here is for it to be running.
+        # (It used to be nudged with `open -a ... --args --reload-widget` after
+        # every write. That spawned a process a minute and did nothing useful:
+        # --args is only delivered on a cold launch, so once the host was up
+        # the nudge just re-activated it and no reload ever happened.)
+        ensure_widget_host_running()
     except Exception:
         log.debug("_write_widget_cache failed", exc_info=True)
 
@@ -131,3 +133,34 @@ def _write_widget_cache(
 def _is_widget_installed() -> bool:
     """Check if the AIQuotaBarHost widget app is installed."""
     return os.path.isdir(WIDGET_HOST_APP)
+
+
+_WIDGET_HOST_PROC = "AIQuotaBarHost.app/Contents/MacOS/AIQuotaBarHost"
+
+
+def ensure_widget_host_running() -> bool:
+    """Start the widget host if it is installed but not running.
+
+    The host watches this cache directory and asks WidgetKit to refresh when a
+    new usage.json lands. Without it the widget only updates when macOS feels
+    like it, which in practice meant hours of stale numbers. Launched hidden
+    and in the background, so it never steals focus.
+    """
+    if not os.path.isdir(WIDGET_HOST_APP):
+        return False
+    try:
+        already = subprocess.run(
+            ["pgrep", "-f", _WIDGET_HOST_PROC],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ).returncode == 0
+        if already:
+            return True
+        subprocess.Popen(
+            ["open", "-g", "-j", "-a", WIDGET_HOST_APP],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        log.debug("launched widget host")
+        return True
+    except Exception as e:
+        log.debug("ensure_widget_host_running failed: %s", e)
+        return False
