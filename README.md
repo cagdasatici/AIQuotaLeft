@@ -40,9 +40,9 @@ The app launches immediately and auto-detects your Claude, ChatGPT, Cursor, and 
 
 ---
 
-### Why I built this
+### Why this fork exists
 
-I kept getting cut off mid-session on Claude Pro with zero warning. Claude.ai doesn't show your usage until you hit the wall. Same with ChatGPT, Cursor, and Copilot. So I built a tiny menu bar app that shows them all.
+Toprak Yagcioglu built AIQuotaBar to make AI usage visible in the menu bar. This fork changes the question the interface answers: how much quota is left? My contributions are listed under [Changes in this fork](#changes-in-this-fork).
 
 ---
 
@@ -162,7 +162,7 @@ cd AIQuotaBarWidget && ./build_widget.sh
 
 ```bash
 git clone https://github.com/cagdasatici/AIQuotaLeft.git
-cd AIQuotaBar
+cd AIQuotaLeft
 pip install -r requirements.txt
 python3 claude_bar.py
 ```
