@@ -27,7 +27,7 @@ from aiquotabar.config import log
 class LimitRow:
     label: str
     pct: int          # 0–100
-    reset_str: str    # e.g. "resets in 1h 23m" or "resets Thu 00:00"
+    reset_str: str    # e.g. "resets Thu 00:00" or "resets Oct 5, 14:32" - see _fmt_reset
 
 
 @dataclass
@@ -162,6 +162,20 @@ _DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 def _fmt_reset(val) -> str:
+    """Format a reset timestamp as an absolute local time, never "in Xh Ym".
+
+    A relative countdown goes stale the moment it's read and forces the
+    reader to do arithmetic; every provider now reports an absolute clock
+    time instead. The API returns UTC, so it must be converted with
+    astimezone() before formatting - printing the UTC wall-clock value
+    labeled as local is silently wrong, not just relative (a UTC+2 reader
+    would read a 21:00 reset as 19:00).
+
+    Under a week out, a weekday name is unambiguous: "resets Wed 14:32".
+    Further out - Cursor's monthly billing cycle is the one case that reaches
+    this - a bare weekday would be ambiguous (which Wednesday?), so the
+    calendar date is used instead: "resets Oct 5, 14:32".
+    """
     if val is None:
         return ""
     try:
@@ -173,18 +187,13 @@ def _fmt_reset(val) -> str:
                 s += "+00:00"
             dt = datetime.fromisoformat(s)
         now = datetime.now(timezone.utc)
-        delta = dt - now
-        secs = delta.total_seconds()
+        secs = (dt - now).total_seconds()
         if secs <= 0:
             return "resets soon"
-        if secs < 3600 * 20:
-            h, rem = divmod(int(secs), 3600)
-            m = rem // 60
-            if h > 0:
-                return f"resets in {h}h {m}m"
-            return f"resets in {m}m"
-        day = _DAYS[dt.weekday()]
-        return f"resets {day} {dt.strftime('%H:%M')}"
+        local = dt.astimezone()
+        if secs < 6 * 86400:
+            return f"resets {_DAYS[local.weekday()]} {local.strftime('%H:%M')}"
+        return f"resets {local.strftime('%b %-d, %H:%M')}"
     except Exception:
         log.debug("_fmt_reset failed for %r", val, exc_info=True)
         return str(val)[:20]
@@ -411,22 +420,7 @@ def fetch_cursor(cookie_str: str) -> ProviderData:
         auto_pct = int(round(float(plan.get("autoPercentUsed", 0))))
         api_pct = int(round(float(plan.get("apiPercentUsed", 0))))
         total_pct = int(round(float(plan.get("totalPercentUsed", 0))))
-        # Build reset string from billingCycleEnd
-        reset_str = ""
-        cycle_end = data.get("billingCycleEnd")
-        if cycle_end:
-            try:
-                end_dt = datetime.fromisoformat(cycle_end.replace("Z", "+00:00"))
-                delta = end_dt - datetime.now(timezone.utc)
-                if delta.total_seconds() > 0:
-                    days = delta.days
-                    hours = delta.seconds // 3600
-                    if days > 0:
-                        reset_str = f"resets in {days}d {hours}h"
-                    else:
-                        reset_str = f"resets in {hours}h"
-            except (ValueError, TypeError):
-                pass
+        reset_str = _fmt_reset(data.get("billingCycleEnd"))
         rows = [
             LimitRow(label="Auto", pct=auto_pct, reset_str=reset_str),
             LimitRow(label="API", pct=api_pct, reset_str=reset_str),

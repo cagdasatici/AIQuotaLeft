@@ -12,7 +12,7 @@ struct QuotaEntry: TimelineEntry {
             version: 1,
             updatedAt: ISO8601DateFormatter().string(from: .now),
             claude: ClaudeUsage(
-                session: LimitRow(label: "Current Session", pct: 36, resetStr: "resets in 2h 14m"),
+                session: LimitRow(label: "Current Session", pct: 36, resetStr: "resets Fri 00:39"),
                 weeklyAll: LimitRow(label: "All Models", pct: 83, resetStr: "resets Wed 23:00"),
                 weeklySonnet: nil,
                 overagesEnabled: false
