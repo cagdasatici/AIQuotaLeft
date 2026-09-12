@@ -117,6 +117,43 @@ class BuildScript(unittest.TestCase):
         self.assertIn("BUILD_NUMBER", sh)
 
 
+class CodexWeeklyLimit(unittest.TestCase):
+    """Codex reports a 5h window (primary_window) and a weekly window
+    (secondary_window) in every rate-limit bucket; the parser used to read
+    only the primary one, so the weekly Codex limit never appeared in the
+    menu bar or the widget."""
+
+    @staticmethod
+    def _bucket(primary_pct, secondary_pct):
+        return {
+            "primary_window": {"used_percent": primary_pct, "reset_at": 4102444800},
+            "secondary_window": {"used_percent": secondary_pct, "reset_at": 4102444800},
+        }
+
+    def test_bucket_yields_both_rows(self):
+        from aiquotabar.providers import _parse_wham_bucket
+        rows = _parse_wham_bucket(self._bucket(80, 12), "Codex Tasks")
+        self.assertEqual([r.label for r in rows], ["Codex Tasks", "Codex Tasks (Weekly)"])
+        self.assertEqual([r.pct for r in rows], [80, 12])
+
+    def test_usage_response_surfaces_weekly_row(self):
+        from aiquotabar.providers import _parse_wham_usage
+        data = {
+            "rate_limit": self._bucket(80, 12),
+            "code_review_rate_limit": None,
+            "additional_rate_limits": None,
+        }
+        pd = _parse_wham_usage(data)
+        self.assertIn("Codex Tasks (Weekly)", [r.label for r in pd._rows])
+
+    def test_missing_secondary_window_is_skipped_not_crashed(self):
+        from aiquotabar.providers import _parse_wham_bucket
+        rows = _parse_wham_bucket(
+            {"primary_window": {"used_percent": 5, "reset_at": 1}}, "Codex Tasks"
+        )
+        self.assertEqual(len(rows), 1)
+
+
 class CopilotProvider(unittest.TestCase):
     def test_fetch_copilot_exists(self):
         # It was deleted by a stray edit, leaving its body orphaned inside

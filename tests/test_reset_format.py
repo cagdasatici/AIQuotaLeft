@@ -69,18 +69,45 @@ class LocalTimezone(unittest.TestCase):
         utc_hhmm = target.strftime("%H:%M")
         self.assertNotIn(utc_hhmm, out)
 
-    def test_weekday_reflects_local_date_across_midnight(self):
-        # A UTC time just before midnight that rolls to the next local day
-        # must report the LOCAL weekday, not the UTC one.
+    def test_across_midnight_reads_as_today_or_tomorrow_locally(self):
+        # A UTC time just before midnight may land on the local "today" or
+        # "tomorrow" depending on this machine's UTC offset - the label must
+        # reflect the LOCAL date, not the UTC one.
         now_utc = datetime.now(timezone.utc)
         near_midnight_utc = now_utc.replace(hour=23, minute=30, second=0, microsecond=0)
         if near_midnight_utc <= now_utc:
             near_midnight_utc += timedelta(days=1)
         out = _fmt_reset(near_midnight_utc.isoformat())
-        expected_day = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][
-            near_midnight_utc.astimezone().weekday()
-        ]
-        self.assertIn(expected_day, out)
+        local_target = near_midnight_utc.astimezone()
+        local_today = datetime.now().astimezone().date()
+        expected_word = "today" if local_target.date() == local_today else "tomorrow"
+        self.assertIn(expected_word, out)
+        self.assertIn(local_target.strftime("%H:%M"), out)
+
+
+class TodayTomorrow(unittest.TestCase):
+    """A reset on the local calendar today/tomorrow says so directly -
+    shorter than a weekday name and needs no day-of-week arithmetic."""
+
+    def test_same_local_day_reads_as_today(self):
+        out = _fmt_reset(_iso(timedelta(minutes=5)))
+        self.assertIn("today", out)
+        self.assertNotIn("tomorrow", out)
+
+    def test_next_local_day_reads_as_tomorrow(self):
+        local_now = datetime.now().astimezone()
+        target_local = (local_now + timedelta(days=1)).replace(
+            hour=9, minute=0, second=0, microsecond=0
+        )
+        if target_local <= local_now:
+            target_local += timedelta(days=1)
+        out = _fmt_reset(target_local.astimezone(timezone.utc).isoformat())
+        self.assertIn("tomorrow", out)
+
+    def test_two_days_out_is_neither_today_nor_tomorrow(self):
+        out = _fmt_reset(_iso(timedelta(days=2)))
+        self.assertNotIn("today", out)
+        self.assertNotIn("tomorrow", out)
 
 
 class Disambiguation(unittest.TestCase):
