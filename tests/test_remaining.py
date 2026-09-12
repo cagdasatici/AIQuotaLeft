@@ -117,6 +117,36 @@ class BuildScript(unittest.TestCase):
         self.assertIn("BUILD_NUMBER", sh)
 
 
+class BarPctIgnoresWeeklyRows(unittest.TestCase):
+    """Adding the Codex weekly row broke the status bar number: it picked
+    max(all rows), so whenever the weekly pct outran the just-reset 5h pct,
+    the bar silently displayed the weekly limit instead of the session one
+    - the same "session drives the bar, not the max of all limits" rule
+    Claude already follows, just not yet applied to multi-row providers."""
+
+    def _pd(self, *label_pcts):
+        from aiquotabar.providers import LimitRow, ProviderData
+        pd = ProviderData("ChatGPT")
+        pd._rows = [LimitRow(label, pct, "") for label, pct in label_pcts]
+        return pd
+
+    def test_weekly_row_cannot_outrank_the_5h_row(self):
+        from aiquotabar.ui import ClaudeBar
+        pd = self._pd(("Codex Tasks", 5), ("Codex Tasks (Weekly)", 90))
+        self.assertEqual(ClaudeBar._provider_bar_pct(None, pd), 5)
+
+    def test_falls_back_to_max_when_every_row_is_weekly(self):
+        from aiquotabar.ui import ClaudeBar
+        pd = self._pd(("Only Weekly", 42))
+        self.assertEqual(ClaudeBar._provider_bar_pct(None, pd), 42)
+
+    def test_non_weekly_rows_still_take_the_max_among_themselves(self):
+        # Cursor's Auto/API rows are both immediate - unaffected by this fix.
+        from aiquotabar.ui import ClaudeBar
+        pd = self._pd(("Auto", 30), ("API", 70))
+        self.assertEqual(ClaudeBar._provider_bar_pct(None, pd), 70)
+
+
 class CodexWeeklyLimit(unittest.TestCase):
     """Codex reports a 5h window (primary_window) and a weekly window
     (secondary_window) in every rate-limit bucket; the parser used to read
