@@ -1952,6 +1952,12 @@ class _UsagePanel:
 
 class ClaudeBar(rumps.App):
     def __init__(self):
+        # Menu bar only: hide the Dock icon and Cmd-Tab entry. Must happen
+        # before the AppKit run loop starts (i.e. before .run()), otherwise
+        # the icon flashes into the Dock and back out.
+        from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
+        NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+
         super().__init__("\u25c6", quit_button=None)
         self.config = load_config()
         self._last_raw: dict = {}
