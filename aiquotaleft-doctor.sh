@@ -274,6 +274,51 @@ else
     say_failed "no usage.json yet"
 fi
 
+# ── 9. menu bar icon actually visible (not just process alive) ──────────────
+# Checks 4 and 8 only prove the process is alive and still fetching - they
+# said everything was fine the day the icon vanished from the menu bar while
+# the widget kept updating. The NSStatusItem can silently drop out of the
+# window server (SystemUIServer restart, display reconfig) without the
+# process crashing or its timers skipping a beat, so liveness and freshness
+# both stay green while the user sees nothing. Ask the window server
+# directly whether this PID owns any window - a status item is a window too,
+# just chromeless - via CGWindowListCopyWindowInfo, which (unlike Accessibility
+# APIs) needs no extra permission grant. Zero windows for a live process
+# means the icon is gone; a full restart re-creates it from scratch.
+bar_pid=$(bar_pids | head -1)
+if [ -n "$bar_pid" ]; then
+    # macOS ps has no `etimes` (seconds) keyword, only `etime` (a
+    # [[dd-]hh:]mm:ss string) - go via the start timestamp instead so this
+    # doesn't depend on parsing that format.
+    start_str=$(ps -o lstart= -p "$bar_pid" 2>/dev/null)
+    start_epoch=$(date -j -f "%a %b %d %T %Y" "$start_str" +%s 2>/dev/null)
+    elapsed=""
+    [ -n "$start_epoch" ] && elapsed=$(( $(date +%s) - start_epoch ))
+    if [ -n "$elapsed" ] && [ "$elapsed" -lt 15 ]; then
+        say_ok "menu bar icon check skipped (just (re)started ${elapsed}s ago)"
+    else
+        icon_windows=$("$APP_DIR/.venv/bin/python3" -c "
+import sys
+from Quartz import CGWindowListCopyWindowInfo, kCGWindowListOptionAll, kCGNullWindowID
+pid = int(sys.argv[1])
+info = CGWindowListCopyWindowInfo(kCGWindowListOptionAll, kCGNullWindowID) or []
+print(sum(1 for w in info if w.get('kCGWindowOwnerPID') == pid))
+" "$bar_pid" 2>/dev/null)
+        if [ -z "$icon_windows" ]; then
+            say_ok "menu bar icon check skipped (Quartz unavailable)"
+        elif [ "$icon_windows" = "0" ]; then
+            if repairing; then
+                launchctl kickstart -k "gui/$UID_NUM/$BAR_LABEL" 2>/dev/null
+                say_fixed "menu bar icon had vanished (process alive, no window) - restarted"
+            else
+                say_failed "menu bar icon vanished (process alive, no window)"
+            fi
+        else
+            say_ok "menu bar icon present ($icon_windows window(s))"
+        fi
+    fi
+fi
+
 echo ""
 echo "  $ok ok, $fixed repaired, $failed failed"
 echo ""
