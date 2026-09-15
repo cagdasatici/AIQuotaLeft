@@ -23,7 +23,6 @@ struct QuotaEntry: TimelineEntry {
             ),
             claudeCode: ClaudeCodeUsage(todayMessages: 42, weekMessages: 312),
             cursor: nil,
-            copilot: nil,
             activeProviders: ["claude", "chatgpt"],
             barProviders: nil
         ),

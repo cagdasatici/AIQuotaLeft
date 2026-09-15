@@ -5,7 +5,7 @@
 > entirely is. It reports what you have **left** rather than what you have used —
 > see [Changes in this fork](#changes-in-this-fork). Not an official AIQuotaBar release.
 
-**Stop getting rate-limited by surprise.** See how much Claude, ChatGPT, Cursor, and Copilot quota you have **left**, live in the macOS menu bar.
+**Stop getting rate-limited by surprise.** See how much Claude, ChatGPT, and Cursor quota you have **left**, live in the macOS menu bar.
 
 No Electron. No browser extension. One command to install.
 
@@ -36,7 +36,7 @@ aiquotaleft &
 Homebrew installs the menu bar app only. The desktop widget needs Xcode — use the
 one-line installer above, or run `AIQuotaBarWidget/build_widget.sh` yourself.
 
-The app launches immediately and auto-detects your Claude, ChatGPT, Cursor, and Copilot sessions from Chrome, Arc, Brave, Edge, Firefox, or Safari — no copy-pasting cookies.
+The app launches immediately and auto-detects your Claude, ChatGPT, and Cursor sessions from Chrome, Arc, Brave, Edge, Firefox, or Safari — no copy-pasting cookies.
 
 ---
 
@@ -81,11 +81,6 @@ CHATGPT
   ██████████████  100% left
   resets Thu 05:38
 
-GITHUB COPILOT
-
-  0 / 300 this month
-  ██████████████  100% left
-
 CURSOR
 
   🟢 Auto
@@ -122,7 +117,7 @@ cd AIQuotaBarWidget && ./build_widget.sh
 ## Features
 
 - **Zero-setup auth** — reads cookies directly from your browser (Chrome, Arc, Brave, Edge, Firefox, Safari)
-- **Claude + ChatGPT + Cursor + Copilot** — tracks Claude.ai session/weekly limits, ChatGPT rate limits, Cursor Auto/API usage, and GitHub Copilot premium requests — all in one place
+- **Claude + ChatGPT + Cursor** — tracks Claude.ai session/weekly limits, ChatGPT Codex rate limits, and Cursor Auto/API usage
 - **Desktop widget** — native macOS WidgetKit widget with brand-colored progress bars
 - **Multi-provider** — add OpenAI, MiniMax, GLM (Zhipu) API keys to see spending alongside usage
 - **Burn rate + ETA** — predicts when you'll hit each limit based on your current pace
@@ -141,7 +136,7 @@ cd AIQuotaBarWidget && ./build_widget.sh
 |---|---|---|---|
 | Always visible | ✅ Menu bar + desktop widget | ❌ Manual tab switch | ⚠️ Badge only |
 | Notifications | ✅ 20% + 5% left + pacing alerts | ❌ None | ⚠️ Varies |
-| Claude + ChatGPT + Cursor + Copilot | ✅ All in one place | ❌ One at a time | ❌ |
+| Claude + ChatGPT + Cursor | ✅ All in one place | ❌ One at a time | ❌ |
 | Desktop widget | ✅ Native WidgetKit | ❌ | ❌ |
 | Privacy | ✅ Local only | ✅ | ⚠️ Depends on extension |
 | Install | ✅ One command | ✅ Nothing | ❌ Store + permissions |
@@ -153,7 +148,7 @@ cd AIQuotaBarWidget && ./build_widget.sh
 
 - macOS 12+
 - Python 3.10+
-- A paid account for any supported service (Claude, ChatGPT, Cursor, or Copilot)
+- A paid account for any supported service (Claude, ChatGPT, or Cursor)
 - Chrome, Arc, Brave, Edge, Firefox, or Safari with an active session
 
 ---
@@ -197,6 +192,9 @@ Make sure you're logged into [claude.ai](https://claude.ai) in your browser, the
 **Session expired / showing ◆ !**
 The app will try to auto-detect fresh cookies from your browser. If that fails, click **Set Session Cookie…**.
 
+**ChatGPT shows HTTP 401**
+The browser can return an expired Codex access token. AIQuotaLeft now uses a fresh local Codex token when it belongs to the same account; if none is available, sign in at chatgpt.com and click **Refresh Now**.
+
 ---
 
 ## Roadmap
@@ -204,7 +202,6 @@ The app will try to auto-detect fresh cookies from your browser. If that fails, 
 - [x] Homebrew tap (`brew tap cagdasatici/aiquotaleft https://github.com/cagdasatici/AIQuotaLeft`)
 - [x] Native macOS desktop widget (WidgetKit)
 - [x] Cursor IDE usage tracking (Auto + API)
-- [x] GitHub Copilot premium request tracking
 - [x] Burn rate ETA + pacing alerts
 - [ ] Linux system tray support
 - [ ] Windows tray app

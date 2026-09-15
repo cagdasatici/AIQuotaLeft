@@ -38,7 +38,7 @@ Every change must either (a) convert more visitors to stars, (b) bring new visit
 
 ## What this is
 
-A native macOS menu bar app (Python + rumps) that shows live Claude, ChatGPT, Cursor, and GitHub Copilot usage limits. It reads cookies from the user's browser (no manual copy-paste), calls provider APIs, and displays the result as a status bar icon (`🟢 4%`, `🟡 83%`, `🔴 100%`).
+A native macOS menu bar app (Python + rumps) that shows live Claude, ChatGPT, and Cursor usage limits. It reads cookies from the user's browser (no manual copy-paste), calls provider APIs, and displays the result as a status bar icon (`🟢 4%`, `🟡 83%`, `🔴 100%`).
 
 ## Architecture
 
@@ -130,7 +130,7 @@ Response fields:
   Long docs belong in a wiki, not the README.
 - **GitHub topics to maintain** (set via repo Settings → About):
   `claude`, `anthropic`, `macos`, `menu-bar`, `usage-monitor`, `menubar-app`, `claude-ai`,
-  `chatgpt`, `cursor`, `copilot`, `rate-limit`, `ai-tools`
+  `chatgpt`, `cursor`, `rate-limit`, `ai-tools`
 
 ## High-impact features to build (star drivers)
 

@@ -1,5 +1,5 @@
 class Aiquotaleft < Formula
-  desc "Menu bar app showing AI quota remaining for Claude, ChatGPT, Cursor, Copilot"
+  desc "Menu bar app showing AI quota remaining for Claude, ChatGPT, and Cursor"
   homepage "https://github.com/cagdasatici/AIQuotaLeft"
   license "MIT"
   head "https://github.com/cagdasatici/AIQuotaLeft.git", branch: "main"

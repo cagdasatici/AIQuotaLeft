@@ -21,10 +21,10 @@ from aiquotabar.config import (
 )
 from aiquotabar.providers import (
     LimitRow, UsageData, ProviderData, parse_usage, fetch_raw,
-    fetch_claude_code_stats, PROVIDER_REGISTRY, COOKIE_PROVIDERS,
+    fetch_claude_code_stats, fetch_chatgpt, PROVIDER_REGISTRY, COOKIE_PROVIDERS,
     CurlHTTPError, parse_cookie_string,
     _auto_detect_cookies, _auto_detect_chatgpt_cookies,
-    _auto_detect_copilot_cookies, _auto_detect_cursor_cookies,
+    _auto_detect_cursor_cookies,
     _warn_keychain_once, _fmt_reset, _BROWSER_COOKIE3_OK,
 )
 from aiquotabar.history import (
@@ -685,7 +685,6 @@ def _show_history_window(conn) -> None:
     # Metric context: what the % means for each provider key
     _metric_hint = {
         "claude": "5-hour session window",
-        "copilot": "rate limit",
     }
 
     for prov in providers:
@@ -1058,7 +1057,6 @@ def _show_text(title: str, text: str):
 _BRAND_COLORS = {
     "Claude": "#D97757",
     "ChatGPT": "#74AA9C",
-    "Copilot": "#6E40C9",
     "Cursor": "#00A0D1",
 }
 
@@ -1622,27 +1620,6 @@ class _UsagePanel:
                     y += 14 + 2
             y += self.SECTION_GAP
 
-        # Copilot section
-        copilot_pd = next((pd for pd in provider_data if pd.name == "Copilot"), None)
-        if copilot_pd and not copilot_pd.error:
-            has_any_data = True
-            reset_str = ""
-            if copilot_pd.spent is not None and copilot_pd.limit:
-                summary_text = f"{int(copilot_pd.spent)} / {int(copilot_pd.limit)}"
-            else:
-                summary_text = ""
-            elements.append(('provider_header', y, 18, 'Copilot', '#6E40C9', summary_text))
-            y += 18 + 6
-            if copilot_pd.pct is not None:
-                fake_row = LimitRow("Premium Requests", copilot_pd.pct, "")
-                elements.append(('limit_row', y, 20, fake_row, '#6E40C9'))
-                y += 20 + self.ROW_GAP
-            eta = _calc_eta_minutes(history, "copilot")
-            if eta is not None:
-                elements.append(('eta_line', y, 14, eta))
-                y += 14 + 2
-            y += self.SECTION_GAP
-
         # Cursor section
         cursor_pd = next((pd for pd in provider_data if pd.name == "Cursor"), None)
         if cursor_pd and not cursor_pd.error:
@@ -1960,12 +1937,27 @@ class ClaudeBar(rumps.App):
 
         super().__init__("\u25c6", quit_button=None)
         self.config = load_config()
+        legacy_config_changed = self.config.pop("copilot_cookies", None) is not None
+        notifications = self.config.get("notifications")
+        if isinstance(notifications, dict):
+            legacy_config_changed |= notifications.pop("copilot_pacing", None) is not None
+        chosen_bar = self.config.get("bar_providers")
+        if isinstance(chosen_bar, list) and "Copilot" in chosen_bar:
+            cleaned_bar = [name for name in chosen_bar if name != "Copilot"]
+            if cleaned_bar:
+                self.config["bar_providers"] = cleaned_bar
+            else:
+                self.config.pop("bar_providers", None)
+            legacy_config_changed = True
+        if legacy_config_changed:
+            save_config(self.config)
         self._last_raw: dict = {}
         self._last_data: UsageData | None = None
         self._provider_data: list[ProviderData] = []
         self._warned_pcts: set[str] = set()   # track which rows we've notified
         self._prev_pcts: dict[str, int] = {}  # previous pct per row key (reset detection)
         self._auth_fail_count = 0
+        self._chatgpt_cookie_retry_after = 0.0
         self._fetching = False
         self._last_updated: datetime | None = None
 
@@ -2098,31 +2090,6 @@ class ClaudeBar(rumps.App):
                         items.append(_mi(line))
                 items.append(None)
 
-        # -- COPILOT section (if detected) ------------------------------------
-        copilot_pd = next(
-            (pd for pd in self._provider_data if pd.name == "Copilot"), None
-        )
-        if copilot_pd:
-            items.append(_section_header_mi("  GitHub Copilot", "copilot.png", "#6E40C9", icon_tint="#9B6BFF"))
-            for line in _provider_lines(copilot_pd):
-                if line:
-                    items.append(_mi(line))
-            # ETA + sparkline for Copilot
-            eta = _calc_eta_minutes(self._history, "copilot")
-            if eta is not None:
-                items.append(_mi(f"  \u23f1 Limit in ~{_fmt_eta(eta)}"))
-            spark = _sparkline(self._history, "copilot")
-            if spark:
-                items.append(_mi(f"  {spark}"))
-                items.append(_mi(f"  \U0001f4c8 24h usage trend"))
-            try:
-                hits = _get_week_limit_hits(self._history_db, "copilot")
-            except Exception:
-                hits = 0
-            if hits > 0:
-                items.append(_mi(f"  Hit limit {hits}x this week"))
-            items.append(None)
-
         # -- CURSOR section (if detected) -------------------------------------
         cursor_pd = next(
             (pd for pd in self._provider_data if pd.name == "Cursor"), None
@@ -2178,7 +2145,7 @@ class ClaudeBar(rumps.App):
 
         # -- Other API providers ----------------------------------------------
         for pd in self._provider_data:
-            if pd.name in ("ChatGPT", "Copilot", "Cursor"):
+            if pd.name in ("ChatGPT", "Cursor"):
                 continue
             items.append(_mi(f"  {pd.name}"))
             items.append(None)
@@ -2258,7 +2225,6 @@ class ClaudeBar(rumps.App):
             ("chatgpt_warning", "ChatGPT \u2014 usage warnings (80% / 95%)"),
             ("chatgpt_reset",   "ChatGPT \u2014 reset alerts"),
             ("chatgpt_pacing",  "ChatGPT \u2014 pacing alert (ETA < 30 min)"),
-            ("copilot_pacing",  "Copilot \u2014 pacing alert (ETA < 30 min)"),
             ("cursor_warning",  "Cursor \u2014 usage warnings (80% / 95%)"),
             ("cursor_pacing",   "Cursor \u2014 pacing alert (ETA < 30 min)"),
         ]
@@ -2273,10 +2239,11 @@ class ClaudeBar(rumps.App):
         providers_menu = rumps.MenuItem("API Providers")
         for cfg_key, (name, _) in PROVIDER_REGISTRY.items():
             is_set = bool(self.config.get(cfg_key))
+            marker = "\u2713" if is_set else "+"
             if cfg_key in COOKIE_PROVIDERS:
-                label = f"{'\u2713' if is_set else '+'} {name} (auto-detect)"
+                label = f"{marker} {name} (auto-detect)"
             else:
-                label = f"{'\u2713' if is_set else '+'} {name} API Key\u2026"
+                label = f"{marker} {name} API Key\u2026"
             providers_menu.add(rumps.MenuItem(
                 label, callback=self._make_provider_key_cb(cfg_key, name)
             ))
@@ -2551,11 +2518,6 @@ class ClaudeBar(rumps.App):
                         for row in rows:
                             hkey = f"{prefix}_{row.label.lower().replace(' ', '_')}"
                             _append_history(self._history, hkey, row.pct)
-            copilot_pd = next(
-                (pd for pd in self._provider_data if pd.name == "Copilot"), None
-            )
-            if copilot_pd and not copilot_pd.error and copilot_pd.pct is not None:
-                _append_history(self._history, "copilot", copilot_pd.pct)
             _save_history(self._history)
 
             # -- record to SQLite history --
@@ -2571,8 +2533,6 @@ class ClaudeBar(rumps.App):
                                 for row in rows:
                                     hkey = f"{prefix}_{row.label.lower().replace(' ', '_')}"
                                     _record_sample(self._history_db, hkey, row.pct)
-                    if copilot_pd and not copilot_pd.error and copilot_pd.pct is not None:
-                        _record_sample(self._history_db, "copilot", copilot_pd.pct)
                     self._history_db.commit()
                     # Periodic rollup (every hour)
                     if time.time() - self._last_rollup > 3600:
@@ -2733,7 +2693,6 @@ class ClaudeBar(rumps.App):
         # Static entries (single history key per provider)
         checks: list[tuple[str, str, str]] = [
             ("claude",  "claude_pacing",  "Claude session"),
-            ("copilot", "copilot_pacing", "Copilot"),
         ]
         # Dynamic per-row entries for multi-limit providers
         for prefix, pname, nkey in [
@@ -2767,7 +2726,6 @@ class ClaudeBar(rumps.App):
         "Claude":  {"icon": "claude_icon.png",        "tint": None,      "color": "#D97757", "sym": "\u25cf"},
         "ChatGPT": {"icon": "chatgpt_icon_clean.png", "tint": "#74AA9C", "color": "#74AA9C", "sym": "\u25c7"},
         "Cursor":  {"icon": "cursor.png",             "tint": "#6699FF", "color": "#6699FF", "sym": "\u25c8"},
-        "Copilot": {"icon": "copilot.png",            "tint": "#8CBFF3", "color": "#8CBFF3", "sym": "\u25c6"},
     }
 
     def _set_bar_title(self, provider_segments: list[tuple[str, int, str]],
@@ -2863,7 +2821,7 @@ class ClaudeBar(rumps.App):
         return None
 
     # Priority order for the 2 bar slots (highest first)
-    _BAR_PRIORITY = ["Claude", "ChatGPT", "Cursor", "Copilot"]
+    _BAR_PRIORITY = ["Claude", "ChatGPT", "Cursor"]
 
     def _apply(self, data: UsageData):
         primary = data.session or data.weekly_all or data.weekly_sonnet
@@ -2912,7 +2870,6 @@ class ClaudeBar(rumps.App):
         # Auto-detect ChatGPT cookies if not saved yet
         _cookie_detectors = {
             "chatgpt_cookies": _auto_detect_chatgpt_cookies,
-            "copilot_cookies": _auto_detect_copilot_cookies,
             "cursor_cookies":  _auto_detect_cursor_cookies,
         }
         for cfg_key in COOKIE_PROVIDERS:
@@ -2945,12 +2902,42 @@ class ClaudeBar(rumps.App):
                     except Exception:
                         log.exception("provider fetch failed")
             self._provider_data = results
+
+            # Saved browser cookies can expire while another browser still has
+            # a valid session. On a 401, try one different browser candidate
+            # and persist it only after its usage request succeeds. Cool down
+            # retries so a logged-out browser does not trigger cookie scans on
+            # every refresh interval.
+            chatgpt_pd = next((pd for pd in results if pd.name == "ChatGPT"), None)
+            old_cookie = keys_snapshot.get("chatgpt_cookies")
+            if (chatgpt_pd and chatgpt_pd.error and "HTTP 401" in chatgpt_pd.error
+                    and old_cookie and time.time() >= self._chatgpt_cookie_retry_after):
+                self._chatgpt_cookie_retry_after = time.time() + 15 * 60
+                try:
+                    refreshed_cookie = _auto_detect_chatgpt_cookies(exclude={old_cookie})
+                    if refreshed_cookie and refreshed_cookie != old_cookie:
+                        refreshed_data = fetch_chatgpt(refreshed_cookie)
+                        if not refreshed_data.error:
+                            with self._config_lock:
+                                self.config["chatgpt_cookies"] = refreshed_cookie
+                                save_config(self.config)
+                            self._provider_data = [
+                                refreshed_data if pd.name == "ChatGPT" else pd
+                                for pd in results
+                            ]
+                            log.info("Replaced expired ChatGPT browser session")
+                        else:
+                            log.info("A second ChatGPT browser session also failed: %s",
+                                     refreshed_data.error)
+                except Exception:
+                    log.debug("ChatGPT cookie recovery failed", exc_info=True)
         else:
             self._provider_data = []
 
     # -- callbacks ------------------------------------------------------------
 
     def _do_refresh(self, _sender):
+        self._chatgpt_cookie_retry_after = 0.0
         self._schedule_fetch()
 
     def _open_usage_page(self, _sender):
@@ -2991,7 +2978,6 @@ class ClaudeBar(rumps.App):
                 # Cookie-based: re-run auto-detect
                 _detectors = {
                     "chatgpt_cookies": _auto_detect_chatgpt_cookies,
-                    "copilot_cookies": _auto_detect_copilot_cookies,
                     "cursor_cookies":  _auto_detect_cursor_cookies,
                 }
                 detect_fn = _detectors.get(cfg_key)
@@ -3000,6 +2986,8 @@ class ClaudeBar(rumps.App):
                     if ck:
                         self.config[cfg_key] = ck
                         save_config(self.config)
+                        if cfg_key == "chatgpt_cookies":
+                            self._chatgpt_cookie_retry_after = 0.0
                         _notify("Claude Usage Bar", f"{name} cookies updated \u2713", "Fetching usage\u2026")
                         self._schedule_fetch()
                     else:
@@ -3045,7 +3033,6 @@ class ClaudeBar(rumps.App):
         "Claude":  ("claude_icon.png",        None),
         "ChatGPT": ("chatgpt_icon_clean.png", "#74AA9C"),
         "Cursor":  ("cursor.png",             "#6699FF"),
-        "Copilot": ("copilot.png",            "#8CBFF3"),
     }
 
     def _make_sticky_toggle(self, display_name: str, is_on: bool, name: str):

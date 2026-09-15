@@ -11,9 +11,13 @@ Both were caught by hand and neither was guarded, so both recurred:
    Optional.none, which turns the optional provider slots into required
    parameters, and WidgetKit then renders a permanently blank widget.
 """
-import ast
+import base64
+import json
 import pathlib
+import tempfile
+import time
 import unittest
+from unittest.mock import patch
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 SWIFT = REPO / "AIQuotaBarWidget" / "AIQuotaBarWidgetExtension"
@@ -79,7 +83,8 @@ class WidgetIntentSchema(unittest.TestCase):
 
     def test_no_none_case(self):
         # `case none` is what makes `default: .none` ambiguous.
-        self.assertNotIn("case claude, chatgpt, cursor, copilot, none", self.src)
+        self.assertIn("case claude, chatgpt, cursor", self.src)
+        self.assertNotIn("copilot", self.src.lower())
 
     def test_optional_slots_have_no_ambiguous_default(self):
         self.assertNotIn("default: .none", self.src)
@@ -184,18 +189,99 @@ class CodexWeeklyLimit(unittest.TestCase):
         self.assertEqual(len(rows), 1)
 
 
-class CopilotProvider(unittest.TestCase):
-    def test_fetch_copilot_exists(self):
-        # It was deleted by a stray edit, leaving its body orphaned inside
-        # fetch_glm as unreachable code.
-        tree = ast.parse((REPO / "aiquotabar" / "providers.py").read_text())
-        names = [n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
-        self.assertIn("fetch_copilot", names)
+class ChatGPTAuth(unittest.TestCase):
+    @staticmethod
+    def _jwt(claims):
+        encoded = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode().rstrip("=")
+        return f"header.{encoded}.signature"
 
-    def test_registered(self):
+    def test_extracts_account_id_from_access_token(self):
+        from aiquotabar.providers import _chatgpt_account_id
+        token = self._jwt({
+            "https://api.openai.com/auth": {"chatgpt_account_id": "account-123"},
+        })
+        self.assertEqual(_chatgpt_account_id({}, token), "account-123")
+
+    def test_detects_expired_access_token_before_usage_request(self):
+        from aiquotabar.providers import _chatgpt_token_expired, fetch_chatgpt
+        expired = self._jwt({"exp": 1})
+        self.assertTrue(_chatgpt_token_expired(expired))
+        with patch("aiquotabar.providers._api_get", return_value={"accessToken": expired}) as get, \
+                patch("aiquotabar.providers._codex_access_token", return_value=None):
+            result = fetch_chatgpt("session=example")
+        self.assertIn("access token expired", result.error.lower())
+        self.assertEqual(get.call_count, 1)
+
+    def test_expired_browser_token_uses_fresh_matching_codex_token(self):
+        from aiquotabar.providers import fetch_chatgpt
+        expired = self._jwt({
+            "exp": 1,
+            "https://api.openai.com/auth": {"chatgpt_account_id": "account-123"},
+        })
+        fresh = self._jwt({
+            "exp": time.time() + 600,
+            "https://api.openai.com/auth": {"chatgpt_account_id": "account-123"},
+        })
+        usage = {"rate_limit": {"primary_window": {"used_percent": 12}}}
+        with patch("aiquotabar.providers._api_get", side_effect=[{"accessToken": expired}, usage]) as get, \
+                patch("aiquotabar.providers._codex_access_token", return_value=fresh):
+            result = fetch_chatgpt("session=example")
+        self.assertIsNone(result.error)
+        self.assertEqual(get.call_args_list[1].args[1]["Authorization"], f"Bearer {fresh}")
+
+    def test_codex_token_fallback_requires_same_account_and_fresh_token(self):
+        from aiquotabar.providers import _codex_access_token
+        fresh = self._jwt({"exp": time.time() + 600})
+        expired = self._jwt({"exp": 1})
+        with tempfile.TemporaryDirectory() as codex_home:
+            auth_path = pathlib.Path(codex_home) / "auth.json"
+            auth_path.write_text(json.dumps({"tokens": {
+                "account_id": "account-123", "access_token": fresh,
+            }}))
+            with patch.dict("os.environ", {"CODEX_HOME": codex_home}):
+                self.assertEqual(_codex_access_token("account-123"), fresh)
+                self.assertIsNone(_codex_access_token("another-account"))
+                auth_path.write_text(json.dumps({"tokens": {
+                    "account_id": "account-123", "access_token": expired,
+                }}))
+                self.assertIsNone(_codex_access_token("account-123"))
+
+    def test_cookie_detection_prefers_unexpired_browser_session(self):
+        from aiquotabar.providers import _auto_detect_chatgpt_cookies
+        expired = self._jwt({"exp": 1})
+        fresh = self._jwt({"exp": time.time() + 600})
+        with patch("aiquotabar.providers._run_cookie_detection", return_value=["session=old", "session=new"]), \
+                patch("aiquotabar.providers._chatgpt_session", side_effect=[(expired, "acct"), (fresh, "acct")]):
+            self.assertEqual(_auto_detect_chatgpt_cookies(), "session=new")
+
+    def test_fetch_sends_required_account_routing_header(self):
+        from aiquotabar.providers import fetch_chatgpt
+        token = self._jwt({
+            "https://api.openai.com/auth": {"chatgpt_account_id": "account-123"},
+        })
+        usage = {
+            "rate_limit": {
+                "primary_window": {"used_percent": 12, "reset_at": 4102444800},
+            },
+        }
+        with patch("aiquotabar.providers._api_get", side_effect=[{"accessToken": token}, usage]) as get:
+            result = fetch_chatgpt("session=example")
+        self.assertIsNone(result.error)
+        self.assertEqual(get.call_args_list[1].args[1]["ChatGPT-Account-Id"], "account-123")
+
+
+class CopilotRemoval(unittest.TestCase):
+    def test_not_registered_or_rendered(self):
         from aiquotabar.providers import PROVIDER_REGISTRY, COOKIE_PROVIDERS
-        self.assertIn("copilot_cookies", PROVIDER_REGISTRY)
-        self.assertIn("copilot_cookies", COOKIE_PROVIDERS)
+        self.assertNotIn("copilot_cookies", PROVIDER_REGISTRY)
+        self.assertNotIn("copilot_cookies", COOKIE_PROVIDERS)
+        providers = (REPO / "aiquotabar" / "providers.py").read_text().lower()
+        ui = (REPO / "aiquotabar" / "ui.py").read_text().lower()
+        widget = (REPO / "aiquotabar" / "widget.py").read_text().lower()
+        self.assertNotIn("fetch_copilot", providers)
+        self.assertNotIn("github copilot", ui)
+        self.assertNotIn("copilot.png", ui)
+        self.assertNotIn("copilot", widget)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 """Data models and API fetch functions for all providers."""
 
+import base64
 import json
 import math
 import os
@@ -252,14 +253,105 @@ def _api_get(url: str, headers: dict, cookies: dict | None = None) -> dict:
 
 _CHATGPT_HEADERS = {
     "Accept": "application/json",
+    "Origin": "https://chatgpt.com",
     "Referer": "https://chatgpt.com/codex/settings/usage",
 }
 
 
-def _chatgpt_access_token(cookies: dict) -> str | None:
-    """Exchange session cookie for a short-lived Bearer token."""
+def _jwt_claims(token: str) -> dict:
+    """Decode JWT claims without validating the signature.
+
+    The token is returned by ChatGPT over the authenticated HTTPS session; we
+    only read its account-routing claim and still send the token back to the
+    same service that issued it.
+    """
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+        return claims if isinstance(claims, dict) else {}
+    except (IndexError, ValueError, TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _chatgpt_account_id(session: dict, access_token: str) -> str | None:
+    """Find the account/workspace id needed to route Codex usage requests."""
+    for source in (session, session.get("tokens") or {}):
+        if isinstance(source, dict):
+            account_id = source.get("account_id") or source.get("accountId")
+            if account_id:
+                return str(account_id)
+
+    tokens = [access_token]
+    for key in ("idToken", "id_token", "id_token_value"):
+        token = session.get(key)
+        if isinstance(token, str):
+            tokens.append(token)
+    nested = session.get("tokens")
+    if isinstance(nested, dict):
+        for key in ("access_token", "id_token"):
+            token = nested.get(key)
+            if isinstance(token, str):
+                tokens.append(token)
+
+    for token in tokens:
+        claims = _jwt_claims(token)
+        auth = claims.get("https://api.openai.com/auth") or {}
+        if isinstance(auth, dict):
+            account_id = auth.get("chatgpt_account_id") or auth.get("account_id")
+            if account_id:
+                return str(account_id)
+        account_id = claims.get("chatgpt_account_id") or claims.get("account_id")
+        if account_id:
+            return str(account_id)
+    return None
+
+
+def _chatgpt_token_expired(token: str, leeway_seconds: int = 30) -> bool:
+    """Return whether a JWT access token is already expired or about to expire."""
+    exp = _jwt_claims(token).get("exp")
+    try:
+        return exp is not None and float(exp) <= time.time() + leeway_seconds
+    except (TypeError, ValueError):
+        return False
+
+
+def _codex_access_token(account_id: str) -> str | None:
+    """Read a fresh Codex token only when its workspace matches this session.
+
+    This is a read-only fallback for an expired browser-issued token. Codex
+    owns token refresh and rotation; this app never writes its auth file.
+    """
+    codex_home = os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex")
+    auth_path = os.path.join(codex_home, "auth.json")
+    try:
+        with open(auth_path) as f:
+            auth = json.load(f)
+        tokens = auth.get("tokens") or {}
+        if not isinstance(tokens, dict):
+            return None
+        codex_account_id = tokens.get("account_id")
+        if not codex_account_id and isinstance(tokens.get("id_token"), str):
+            codex_account_id = _chatgpt_account_id({}, tokens["id_token"])
+        if not account_id or str(codex_account_id or "") != str(account_id):
+            return None
+        token = tokens.get("access_token")
+        if isinstance(token, str) and token and not _chatgpt_token_expired(token):
+            return token
+    except (OSError, ValueError, TypeError):
+        log.debug("Could not read Codex auth fallback", exc_info=True)
+    return None
+
+
+def _chatgpt_session(cookies: dict) -> tuple[str | None, str | None]:
+    """Exchange browser cookies for a short-lived token and account id."""
     data = _api_get("https://chatgpt.com/api/auth/session", _CHATGPT_HEADERS, cookies)
-    return data.get("accessToken")
+    token = data.get("accessToken") or data.get("access_token")
+    if not token and isinstance(data.get("tokens"), dict):
+        token = data["tokens"].get("access_token")
+    if not isinstance(token, str) or not token:
+        return None, None
+    return token, _chatgpt_account_id(data, token)
 
 
 def _parse_wham_window(pw: dict | None, label: str) -> LimitRow | None:
@@ -330,15 +422,67 @@ def fetch_chatgpt(cookie_str: str) -> ProviderData:
     """Fetch ChatGPT / Codex usage via /backend-api/wham/usage."""
     cookies = parse_cookie_string(cookie_str)
     try:
-        token = _chatgpt_access_token(cookies)
+        token, account_id = _chatgpt_session(cookies)
         if not token:
-            return ProviderData("ChatGPT", error="Not logged in")
-        h = {**_CHATGPT_HEADERS, "Authorization": f"Bearer {token}"}
-        data = _api_get("https://chatgpt.com/backend-api/wham/usage", h, cookies)
+            return ProviderData("ChatGPT", error="ChatGPT browser session has expired; sign in again.")
+        if _chatgpt_token_expired(token):
+            token = _codex_access_token(account_id or "")
+            if not token:
+                return ProviderData(
+                    "ChatGPT",
+                    error="ChatGPT access token expired (HTTP 401); sign in at chatgpt.com, then click Refresh.",
+                )
+        if not account_id:
+            return ProviderData(
+                "ChatGPT",
+                error="ChatGPT account ID is missing; refresh your browser session by signing in again.",
+            )
+        h = {
+            **_CHATGPT_HEADERS,
+            "Authorization": f"Bearer {token}",
+            "ChatGPT-Account-Id": account_id,
+        }
+        try:
+            data = _api_get("https://chatgpt.com/backend-api/wham/usage", h, cookies)
+        except CurlHTTPError as e:
+            response = getattr(e, "response", None)
+            error_code = ""
+            try:
+                error_code = (response.json().get("error") or {}).get("code", "")
+            except Exception:
+                pass
+            if getattr(response, "status_code", None) == 401 and error_code == "token_expired":
+                fresh_token = _codex_access_token(account_id)
+                if fresh_token and fresh_token != token:
+                    h["Authorization"] = f"Bearer {fresh_token}"
+                    data = _api_get("https://chatgpt.com/backend-api/wham/usage", h, cookies)
+                else:
+                    raise
+            else:
+                raise
         return _parse_wham_usage(data)
+    except CurlHTTPError as e:
+        response = getattr(e, "response", None)
+        status = getattr(response, "status_code", None)
+        log.debug("fetch_chatgpt failed with HTTP %s", status or "unknown")
+        if status == 401:
+            error_code = ""
+            try:
+                error_code = (response.json().get("error") or {}).get("code", "")
+            except Exception:
+                pass
+            if error_code == "token_expired":
+                message = "ChatGPT access token expired (HTTP 401); sign in at chatgpt.com, then click Refresh."
+            else:
+                message = "ChatGPT rejected the session (HTTP 401); sign in again in your browser."
+        elif status == 403:
+            message = "ChatGPT denied the usage request (HTTP 403)."
+        else:
+            message = f"ChatGPT request failed (HTTP {status})." if status else "ChatGPT request failed."
+        return ProviderData("ChatGPT", error=message)
     except Exception as e:
         log.debug("fetch_chatgpt failed: %s", e)
-        return ProviderData("ChatGPT", error=str(e)[:80])
+        return ProviderData("ChatGPT", error=f"ChatGPT request failed: {str(e)[:70]}")
 
 
 def fetch_openai(api_key: str) -> ProviderData:
@@ -395,34 +539,6 @@ def fetch_glm(api_key: str) -> ProviderData:
         return ProviderData("GLM (Zhipu)", error=str(e)[:80])
 
 
-def fetch_copilot(cookie_str: str) -> ProviderData:
-    """Fetch GitHub Copilot premium request usage via browser cookies."""
-    cookies = parse_cookie_string(cookie_str)
-    try:
-        r = requests.get(
-            "https://github.com/settings/billing/copilot_usage_card",
-            cookies=_strip_cf_cookies(cookies),
-            headers={
-                "Accept": "application/json",
-                "Referer": "https://github.com/settings/billing/premium_requests_usage",
-            },
-            timeout=10,
-            impersonate=_IMPERSONATE,
-        )
-        r.raise_for_status()
-        data = r.json()
-        log.debug("copilot_usage_card: %s", json.dumps(data, indent=2))
-        used = float(data.get("discountQuantity", 0))
-        limit = float(data.get("userPremiumRequestEntitlement", 0))
-        return ProviderData(
-            "Copilot", spent=used, limit=limit or None,
-            currency="", period="this month",
-        )
-    except Exception as e:
-        log.debug("fetch_copilot failed: %s", e)
-        return ProviderData("Copilot", error=str(e)[:80])
-
-
 def fetch_cursor(cookie_str: str) -> ProviderData:
     """Fetch Cursor IDE usage via browser cookies (WorkOS session)."""
     cookies = parse_cookie_string(cookie_str)
@@ -458,11 +574,10 @@ def fetch_cursor(cookie_str: str) -> ProviderData:
 
 
 # Registry: config_key -> (display_name, fetch_fn)
-# chatgpt_cookies / copilot_cookies are cookie-based (auto-detected);
+# chatgpt_cookies are cookie-based (auto-detected);
 # others are API key-based.
 PROVIDER_REGISTRY: dict[str, tuple[str, callable]] = {
     "chatgpt_cookies": ("ChatGPT",     fetch_chatgpt),
-    "copilot_cookies": ("Copilot",     fetch_copilot),
     "cursor_cookies":  ("Cursor",      fetch_cursor),
     "openai_key":      ("OpenAI",      fetch_openai),
     "minimax_key":     ("MiniMax",     fetch_minimax),
@@ -470,7 +585,7 @@ PROVIDER_REGISTRY: dict[str, tuple[str, callable]] = {
 }
 
 # Cookie-based providers (auto-detected from browser, not manually entered)
-COOKIE_PROVIDERS = {"chatgpt_cookies", "copilot_cookies", "cursor_cookies"}
+COOKIE_PROVIDERS = {"chatgpt_cookies", "cursor_cookies"}
 
 
 # ── Claude Code local stats ───────────────────────────────────────────────────
@@ -651,20 +766,25 @@ def _auto_detect_cookies() -> str | None:
     return candidates[0]
 
 
-def _auto_detect_chatgpt_cookies() -> str | None:
-    """Detect chatgpt.com session cookies from the browser (crash-safe subprocess)."""
+def _auto_detect_chatgpt_cookies(exclude: set[str] | None = None) -> str | None:
+    """Choose a browser candidate that still yields ChatGPT account credentials."""
     if not _BROWSER_COOKIE3_OK:
         return None
     cands = _run_cookie_detection("chatgpt.com", "__Secure-next-auth.session-token")
-    return cands[0] if cands else None
-
-
-def _auto_detect_copilot_cookies() -> str | None:
-    """Detect github.com session cookies from the browser (crash-safe subprocess)."""
-    if not _BROWSER_COOKIE3_OK:
-        return None
-    cands = _run_cookie_detection("github.com", "user_session")
-    return cands[0] if cands else None
+    exclude = exclude or set()
+    fallback = None
+    for candidate in cands:
+        if candidate in exclude:
+            continue
+        if fallback is None:
+            fallback = candidate
+        try:
+            token, account_id = _chatgpt_session(parse_cookie_string(candidate))
+            if token and account_id and not _chatgpt_token_expired(token):
+                return candidate
+        except Exception as e:
+            log.debug("ChatGPT cookie candidate rejected: %s", e)
+    return fallback
 
 
 def _auto_detect_cursor_cookies() -> str | None:
