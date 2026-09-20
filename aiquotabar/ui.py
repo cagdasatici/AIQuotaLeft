@@ -30,7 +30,7 @@ from aiquotabar.history import (
     _load_history, _save_history, _append_history,
     _calc_burn_rate, _calc_eta_minutes, _fmt_eta, _sparkline,
     _init_history_db, _record_sample, _rollup_daily_stats,
-    _get_week_limit_hits, _get_today_stats,
+    _get_today_stats,
     _fetch_history_data, _nscolor,
 )
 from aiquotabar.widget import _write_widget_cache, _is_widget_installed
@@ -654,12 +654,11 @@ def _show_history_window(conn) -> None:
 
     # -- Stats Cards ------------------------------------------------------
     CARD_GAP = 10
-    card_w = (inner_w - CARD_GAP * 3) / 4
+    card_w = (inner_w - CARD_GAP * 2) / 3
     cards = [
         (f"{summary['highest'][1]}%", "Highest Day", summary["highest"][0], "#D97757"),
         (f"{summary['lowest'][1]}%", "Lowest Day", summary["lowest"][0], "#74AA9C"),
         (f"{summary['avg']}%", "Daily Avg", "", "#6E40C9"),
-        (f"{summary['total_hits']}x", "Hit Limit", "", "#00A0D1"),
     ]
     for i, (val, lbl, sub, clr) in enumerate(cards):
         cx = PAD + i * (card_w + CARD_GAP)
@@ -698,8 +697,6 @@ def _show_history_window(conn) -> None:
 
         # Summary
         stxt = f"Avg {prov['avg']}% used  \u00b7  Peak {prov['peak']}% used"
-        if prov["hits"] > 0:
-            stxt += f"  \u00b7  Hit limit {prov['hits']}x"
         _lbl(doc, stxt, PAD, y, inner_w, size=11, color=dim)
         y += 18
 
@@ -1598,15 +1595,6 @@ class _UsagePanel:
                 elements.append(('spark_line', y, 14, spark))
                 y += 14 + 2
 
-            # Hit limit count
-            try:
-                hits = _get_week_limit_hits(history_db, "claude")
-            except Exception:
-                hits = 0
-            if hits > 0:
-                elements.append(('hit_line', y, 14, hits))
-                y += 14 + 2
-
             y += self.SECTION_GAP
 
         # ChatGPT section
@@ -1688,7 +1676,7 @@ class _UsagePanel:
                 _, _, _, eta_min = elem
                 self._render_small_text(
                     doc, PAD, real_y, inner, h,
-                    f"\u23f1 ~{_fmt_eta(eta_min)} to limit",
+                    f"\u23f1 At this pace: limit in ~{_fmt_eta(eta_min)}",
                     NSTextField, NSFont, NSColor, NSMakeRect,
                 )
 
@@ -1697,14 +1685,6 @@ class _UsagePanel:
                 self._render_small_text(
                     doc, PAD, real_y, inner, h,
                     spark_str,
-                    NSTextField, NSFont, NSColor, NSMakeRect,
-                )
-
-            elif kind == 'hit_line':
-                _, _, _, hit_count = elem
-                self._render_small_text(
-                    doc, PAD, real_y, inner, h,
-                    f"Hit limit {hit_count}x this week",
                     NSTextField, NSFont, NSColor, NSMakeRect,
                 )
 
@@ -2046,17 +2026,11 @@ class ClaudeBar(rumps.App):
                 # ETA + sparkline for Claude session
                 eta = _calc_eta_minutes(self._history, "claude")
                 if eta is not None:
-                    items.append(_mi(f"  \u23f1 Limit in ~{_fmt_eta(eta)}"))
+                    items.append(_mi(f"  \u23f1 At this pace: limit in ~{_fmt_eta(eta)}"))
                 spark = _sparkline(self._history, "claude")
                 if spark:
                     items.append(_mi(f"  {spark}"))
                     items.append(_mi(f"  \U0001f4c8 24h usage trend"))
-                try:
-                    hits = _get_week_limit_hits(self._history_db, "claude")
-                except Exception:
-                    hits = 0
-                if hits > 0:
-                    items.append(_mi(f"  Hit limit {hits}x this week"))
                 items.append(None)
 
             for row in [data.weekly_all, data.weekly_sonnet]:
@@ -2083,17 +2057,11 @@ class ClaudeBar(rumps.App):
                     hkey = f"chatgpt_{row.label.lower().replace(' ', '_')}"
                     eta = _calc_eta_minutes(self._history, hkey)
                     if eta is not None:
-                        items.append(_mi(f"  \u23f1 Limit in ~{_fmt_eta(eta)}"))
+                        items.append(_mi(f"  \u23f1 At this pace: limit in ~{_fmt_eta(eta)}"))
                     spark = _sparkline(self._history, hkey)
                     if spark:
                         items.append(_mi(f"  {spark}"))
                         items.append(_mi(f"  \U0001f4c8 24h usage trend"))
-                    try:
-                        hits = _get_week_limit_hits(self._history_db, hkey)
-                    except Exception:
-                        hits = 0
-                    if hits > 0:
-                        items.append(_mi(f"  Hit limit {hits}x this week"))
                     items.append(None)
             else:
                 for line in _provider_lines(chatgpt_pd):

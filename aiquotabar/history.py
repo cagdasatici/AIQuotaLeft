@@ -246,22 +246,6 @@ def _get_weekly_stats(conn: sqlite3.Connection, key: str) -> list[dict]:
     ]
 
 
-def _get_week_limit_hits(conn: sqlite3.Connection, key: str) -> int:
-    """Return total number of limit-hit samples in the past 7 days."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
-    row = conn.execute(
-        "SELECT COALESCE(SUM(limit_hits), 0) FROM daily_stats WHERE key = ? AND date >= ?",
-        (key, cutoff),
-    ).fetchone()
-    # Also count today's samples that are at limit
-    cutoff_ts = (datetime.now(timezone.utc) - timedelta(days=7)).timestamp()
-    today_row = conn.execute(
-        "SELECT COUNT(*) FROM samples WHERE key = ? AND pct >= ? AND ts >= ?",
-        (key, LIMIT_HIT_PCT, cutoff_ts),
-    ).fetchone()
-    return (row[0] if row else 0) + (today_row[0] if today_row else 0)
-
-
 def _weekly_sparkline(daily_stats: list[dict], width: int = 7) -> str:
     """Render a 7-day sparkline from daily peak values."""
     if len(daily_stats) < 2:
@@ -362,7 +346,6 @@ def _fetch_history_data(conn: sqlite3.Connection) -> dict | None:
         avgs = [d["avg_pct"] for d in stats]
         avg_val = round(sum(avgs) / len(avgs)) if avgs else 0
         peak_val = max(peaks) if peaks else 0
-        total_hits = sum(d["limit_hits"] for d in stats)
         # Color: use parent provider color for sub-keys
         color = HISTORY_COLORS.get(key)
         if color is None:
@@ -381,7 +364,7 @@ def _fetch_history_data(conn: sqlite3.Connection) -> dict | None:
 
         providers.append({
             "key": key, "label": label, "color": color,
-            "weekly": weekly, "avg": avg_val, "peak": peak_val, "hits": total_hits,
+            "weekly": weekly, "avg": avg_val, "peak": peak_val,
         })
 
     # Summary
@@ -389,7 +372,6 @@ def _fetch_history_data(conn: sqlite3.Connection) -> dict | None:
     highest = max(all_peaks, key=lambda x: x[1])
     lowest = min(all_peaks, key=lambda x: x[1])
     avg_overall = round(sum(v for _, v in all_peaks) / len(all_peaks)) if all_peaks else 0
-    total_hits = sum(p["hits"] for p in providers)
     earliest = min(per_day.keys())
 
     def _fmt_day(date_str):
@@ -410,7 +392,6 @@ def _fetch_history_data(conn: sqlite3.Connection) -> dict | None:
             "highest": (_fmt_day(highest[0]), highest[1]),
             "lowest": (_fmt_day(lowest[0]), lowest[1]),
             "avg": avg_overall,
-            "total_hits": total_hits,
         },
     }
 
@@ -465,18 +446,14 @@ def cli_history():
             pct = d["peak_pct"]
             filled = round(pct / 100 * bar_width)
             bar = "\u2588" * filled + "\u2591" * (bar_width - filled)
-            hit_mark = " \u26a0" if d["limit_hits"] > 0 else ""
-            print(f"    {_dim}{day_name}{_reset}  {color}{bar}{_reset}  {pct}%{hit_mark}")
+            print(f"    {_dim}{day_name}{_reset}  {color}{bar}{_reset}  {pct}%")
 
         # Summary line
         peaks = [d["peak_pct"] for d in stats]
         avgs = [d["avg_pct"] for d in stats]
-        total_hits = sum(d["limit_hits"] for d in stats)
         avg_all = round(sum(avgs) / len(avgs)) if avgs else 0
         peak_all = max(peaks) if peaks else 0
         summary = f"    avg {avg_all}%  \u00b7  peak {peak_all}%"
-        if total_hits > 0:
-            summary += f"  \u00b7  hit limit {total_hits}x"
         print(f"  {_dim}{summary}{_reset}\n")
 
     conn.close()

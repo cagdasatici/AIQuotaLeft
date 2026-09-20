@@ -78,6 +78,13 @@ class FloatingPanelResetTimes(unittest.TestCase):
         self.assertIn("reset_lbl.setTextColor_(NSColor.secondaryLabelColor())", ui)
 
 
+class LimitHitDisplay(unittest.TestCase):
+    def test_does_not_present_sample_counts_as_lockouts(self):
+        ui = (REPO / "aiquotabar" / "ui.py").read_text()
+        self.assertNotIn("Hit limit", ui)
+        self.assertIn("At this pace: limit in", ui)
+
+
 class StatusIcon(unittest.TestCase):
     def test_red_when_almost_out(self):
         from aiquotabar.ui import _status_icon
