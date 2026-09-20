@@ -5,7 +5,7 @@
 > entirely is. It reports what you have **left** rather than what you have used —
 > see [Changes in this fork](#changes-in-this-fork). Not an official AIQuotaBar release.
 
-**Stop getting rate-limited by surprise.** See how much Claude, ChatGPT, and Cursor quota you have **left**, live in the macOS menu bar.
+**Stop getting rate-limited by surprise.** See how much Claude and ChatGPT quota you have **left**, live in the macOS menu bar.
 
 No Electron. No browser extension. One command to install.
 
@@ -36,7 +36,7 @@ aiquotaleft &
 Homebrew installs the menu bar app only. The desktop widget needs Xcode — use the
 one-line installer above, or run `AIQuotaBarWidget/build_widget.sh` yourself.
 
-The app launches immediately and auto-detects your Claude, ChatGPT, and Cursor sessions from Chrome, Arc, Brave, Edge, Firefox, or Safari — no copy-pasting cookies.
+The app launches immediately and auto-detects your Claude and ChatGPT sessions from Chrome, Arc, Brave, Edge, Firefox, or Safari — no copy-pasting cookies.
 
 ---
 
@@ -63,33 +63,27 @@ Open the menu for full detail:
 ```
 CLAUDE
 
-  🟢 Current Session
+  🟢 5-hour
   ████████████░░  88% left
-  resets in 3h 41m
+  resets today 15:41
 
-  🟡 All Models
+  🟡 Weekly
   ██░░░░░░░░░░░░  17% left
   resets Wed 23:00
 
-  🟢 Sonnet Only
+  🟢 Weekly (Sonnet)
   ███████████░░░  78% left
   resets Wed 23:00
 
 CHATGPT
 
-  🟢 Codex Tasks
+  🟢 5-hour
   ██████████████  100% left
   resets Thu 05:38
 
-CURSOR
-
-  🟢 Auto
+  🟢 Weekly
   ██████████████  100% left
-  resets in 27d
-
-  🟢 API
-  ██████████████  100% left
-  resets in 27d
+  resets Wed 23:00
 ```
 
 ---
@@ -117,13 +111,13 @@ cd AIQuotaBarWidget && ./build_widget.sh
 ## Features
 
 - **Zero-setup auth** — reads cookies directly from your browser (Chrome, Arc, Brave, Edge, Firefox, Safari)
-- **Claude + ChatGPT + Cursor** — tracks Claude.ai session/weekly limits, ChatGPT Codex rate limits, and Cursor Auto/API usage
+- **Claude + ChatGPT** — tracks Claude.ai 5-hour/weekly limits and ChatGPT Codex 5-hour/weekly limits
 - **Desktop widget** — native macOS WidgetKit widget with brand-colored progress bars
 - **Multi-provider** — add OpenAI, MiniMax, GLM (Zhipu) API keys to see spending alongside usage
 - **Burn rate + ETA** — predicts when you'll hit each limit based on your current pace
 - **Pacing alerts** — notifies you when you're on track to hit a limit within 30 minutes
 - **Auto-refresh on session expiry** — silently grabs fresh cookies when your session expires
-- **macOS notifications** — alerts when you drop to 20% and 5% remaining for Claude, ChatGPT, and Cursor
+- **macOS notifications** — alerts when you drop to 20% and 5% remaining for Claude and ChatGPT
 - **Configurable refresh** — 1 / 5 / 15 min
 - **Runs at login** — via LaunchAgent, toggle from the menu
 - **Tiny footprint** — single-file Python app, no Electron, no background services beyond the app itself
@@ -136,7 +130,7 @@ cd AIQuotaBarWidget && ./build_widget.sh
 |---|---|---|---|
 | Always visible | ✅ Menu bar + desktop widget | ❌ Manual tab switch | ⚠️ Badge only |
 | Notifications | ✅ 20% + 5% left + pacing alerts | ❌ None | ⚠️ Varies |
-| Claude + ChatGPT + Cursor | ✅ All in one place | ❌ One at a time | ❌ |
+| Claude + ChatGPT | ✅ All in one place | ❌ One at a time | ❌ |
 | Desktop widget | ✅ Native WidgetKit | ❌ | ❌ |
 | Privacy | ✅ Local only | ✅ | ⚠️ Depends on extension |
 | Install | ✅ One command | ✅ Nothing | ❌ Store + permissions |
@@ -148,7 +142,7 @@ cd AIQuotaBarWidget && ./build_widget.sh
 
 - macOS 12+
 - Python 3.10+
-- A paid account for any supported service (Claude, ChatGPT, or Cursor)
+- A paid Claude or ChatGPT account
 - Chrome, Arc, Brave, Edge, Firefox, or Safari with an active session
 
 ---
@@ -172,9 +166,9 @@ The app calls the same private usage API that `claude.ai/settings/usage` uses. I
 
 | API field | Displayed as |
 |---|---|
-| `five_hour` | Current Session |
-| `seven_day` | All Models (weekly) |
-| `seven_day_sonnet` | Sonnet Only (weekly) |
+| `five_hour` | 5-hour |
+| `seven_day` | Weekly |
+| `seven_day_sonnet` | Weekly (Sonnet) |
 | `extra_usage` | Extra Usage toggle |
 
 ---
@@ -201,7 +195,6 @@ The browser can return an expired Codex access token. AIQuotaLeft now uses a fre
 
 - [x] Homebrew tap (`brew tap cagdasatici/aiquotaleft https://github.com/cagdasatici/AIQuotaLeft`)
 - [x] Native macOS desktop widget (WidgetKit)
-- [x] Cursor IDE usage tracking (Auto + API)
 - [x] Burn rate ETA + pacing alerts
 - [ ] Linux system tray support
 - [ ] Windows tray app

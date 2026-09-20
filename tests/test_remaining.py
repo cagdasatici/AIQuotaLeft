@@ -83,7 +83,8 @@ class WidgetIntentSchema(unittest.TestCase):
 
     def test_no_none_case(self):
         # `case none` is what makes `default: .none` ambiguous.
-        self.assertIn("case claude, chatgpt, cursor", self.src)
+        self.assertIn("case claude, chatgpt", self.src)
+        self.assertNotIn("cursor", self.src.lower())
         self.assertNotIn("copilot", self.src.lower())
 
     def test_optional_slots_have_no_ambiguous_default(self):
@@ -137,7 +138,7 @@ class BarPctIgnoresWeeklyRows(unittest.TestCase):
 
     def test_weekly_row_cannot_outrank_the_5h_row(self):
         from aiquotabar.ui import ClaudeBar
-        pd = self._pd(("Codex Tasks", 5), ("Codex Tasks (Weekly)", 90))
+        pd = self._pd(("5-hour", 5), ("Weekly", 90))
         self.assertEqual(ClaudeBar._provider_bar_pct(None, pd), 5)
 
     def test_falls_back_to_max_when_every_row_is_weekly(self):
@@ -146,7 +147,7 @@ class BarPctIgnoresWeeklyRows(unittest.TestCase):
         self.assertEqual(ClaudeBar._provider_bar_pct(None, pd), 42)
 
     def test_non_weekly_rows_still_take_the_max_among_themselves(self):
-        # Cursor's Auto/API rows are both immediate - unaffected by this fix.
+        # Multiple immediate rows still use the most-constrained one.
         from aiquotabar.ui import ClaudeBar
         pd = self._pd(("Auto", 30), ("API", 70))
         self.assertEqual(ClaudeBar._provider_bar_pct(None, pd), 70)
@@ -167,8 +168,8 @@ class CodexWeeklyLimit(unittest.TestCase):
 
     def test_bucket_yields_both_rows(self):
         from aiquotabar.providers import _parse_wham_bucket
-        rows = _parse_wham_bucket(self._bucket(80, 12), "Codex Tasks")
-        self.assertEqual([r.label for r in rows], ["Codex Tasks", "Codex Tasks (Weekly)"])
+        rows = _parse_wham_bucket(self._bucket(80, 12), "5-hour", "Weekly")
+        self.assertEqual([r.label for r in rows], ["5-hour", "Weekly"])
         self.assertEqual([r.pct for r in rows], [80, 12])
 
     def test_usage_response_surfaces_weekly_row(self):
@@ -179,12 +180,12 @@ class CodexWeeklyLimit(unittest.TestCase):
             "additional_rate_limits": None,
         }
         pd = _parse_wham_usage(data)
-        self.assertIn("Codex Tasks (Weekly)", [r.label for r in pd._rows])
+        self.assertEqual([r.label for r in pd._rows], ["5-hour", "Weekly"])
 
     def test_missing_secondary_window_is_skipped_not_crashed(self):
         from aiquotabar.providers import _parse_wham_bucket
         rows = _parse_wham_bucket(
-            {"primary_window": {"used_percent": 5, "reset_at": 1}}, "Codex Tasks"
+            {"primary_window": {"used_percent": 5, "reset_at": 1}}, "5-hour", "Weekly"
         )
         self.assertEqual(len(rows), 1)
 
@@ -282,6 +283,19 @@ class CopilotRemoval(unittest.TestCase):
         self.assertNotIn("github copilot", ui)
         self.assertNotIn("copilot.png", ui)
         self.assertNotIn("copilot", widget)
+
+
+class CursorRemoval(unittest.TestCase):
+    def test_not_registered_or_rendered(self):
+        from aiquotabar.providers import PROVIDER_REGISTRY, COOKIE_PROVIDERS
+        self.assertNotIn("cursor_cookies", PROVIDER_REGISTRY)
+        self.assertNotIn("cursor_cookies", COOKIE_PROVIDERS)
+        providers = (REPO / "aiquotabar" / "providers.py").read_text().lower()
+        ui = (REPO / "aiquotabar" / "ui.py").read_text().lower()
+        widget = (REPO / "aiquotabar" / "widget.py").read_text().lower()
+        self.assertNotIn("fetch_cursor", providers)
+        self.assertNotIn('"  Cursor"', ui)
+        self.assertNotIn('"cursor"', widget)
 
 
 if __name__ == "__main__":

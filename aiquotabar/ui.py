@@ -24,7 +24,6 @@ from aiquotabar.providers import (
     fetch_claude_code_stats, fetch_chatgpt, PROVIDER_REGISTRY, COOKIE_PROVIDERS,
     CurlHTTPError, parse_cookie_string,
     _auto_detect_cookies, _auto_detect_chatgpt_cookies,
-    _auto_detect_cursor_cookies,
     _warn_keychain_once, _fmt_reset, _BROWSER_COOKIE3_OK,
 )
 from aiquotabar.history import (
@@ -1057,7 +1056,6 @@ def _show_text(title: str, text: str):
 _BRAND_COLORS = {
     "Claude": "#D97757",
     "ChatGPT": "#74AA9C",
-    "Cursor": "#00A0D1",
 }
 
 # ObjC subclasses are defined lazily on first use so AppKit import
@@ -1620,24 +1618,6 @@ class _UsagePanel:
                     y += 14 + 2
             y += self.SECTION_GAP
 
-        # Cursor section
-        cursor_pd = next((pd for pd in provider_data if pd.name == "Cursor"), None)
-        if cursor_pd and not cursor_pd.error:
-            has_any_data = True
-            rows = getattr(cursor_pd, "_rows", None) or []
-            reset_str = rows[0].reset_str if rows else ""
-            elements.append(('provider_header', y, 18, 'Cursor', '#00A0D1', reset_str))
-            y += 18 + 6
-            for row in rows:
-                elements.append(('limit_row', y, 20, row, '#00A0D1'))
-                y += 20 + self.ROW_GAP
-                hkey = f"cursor_{row.label.lower().replace(' ', '_')}"
-                eta = _calc_eta_minutes(history, hkey)
-                if eta is not None:
-                    elements.append(('eta_line', y, 14, eta))
-                    y += 14 + 2
-            y += self.SECTION_GAP
-
         # No data placeholder
         if not has_any_data:
             elements.append(('placeholder', y, 40))
@@ -1938,12 +1918,15 @@ class ClaudeBar(rumps.App):
         super().__init__("\u25c6", quit_button=None)
         self.config = load_config()
         legacy_config_changed = self.config.pop("copilot_cookies", None) is not None
+        legacy_config_changed |= self.config.pop("cursor_cookies", None) is not None
         notifications = self.config.get("notifications")
         if isinstance(notifications, dict):
             legacy_config_changed |= notifications.pop("copilot_pacing", None) is not None
+            legacy_config_changed |= notifications.pop("cursor_warning", None) is not None
+            legacy_config_changed |= notifications.pop("cursor_pacing", None) is not None
         chosen_bar = self.config.get("bar_providers")
-        if isinstance(chosen_bar, list) and "Copilot" in chosen_bar:
-            cleaned_bar = [name for name in chosen_bar if name != "Copilot"]
+        if isinstance(chosen_bar, list) and any(name in ("Copilot", "Cursor") for name in chosen_bar):
+            cleaned_bar = [name for name in chosen_bar if name not in ("Copilot", "Cursor")]
             if cleaned_bar:
                 self.config["bar_providers"] = cleaned_bar
             else:
@@ -2090,39 +2073,6 @@ class ClaudeBar(rumps.App):
                         items.append(_mi(line))
                 items.append(None)
 
-        # -- CURSOR section (if detected) -------------------------------------
-        cursor_pd = next(
-            (pd for pd in self._provider_data if pd.name == "Cursor"), None
-        )
-        if cursor_pd:
-            items.append(_section_header_mi("  Cursor", "cursor.png", "#00A0D1", icon_tint="#00A0D1"))
-            rows = getattr(cursor_pd, "_rows", None)
-            if rows:
-                for row in rows:
-                    lines = _row_lines(row)
-                    items.append(_mi(lines[0]))
-                    items.append(_colored_mi(lines[1], "#00A0D1"))
-                    hkey = f"cursor_{row.label.lower().replace(' ', '_')}"
-                    eta = _calc_eta_minutes(self._history, hkey)
-                    if eta is not None:
-                        items.append(_mi(f"  \u23f1 Limit in ~{_fmt_eta(eta)}"))
-                    spark = _sparkline(self._history, hkey)
-                    if spark:
-                        items.append(_mi(f"  {spark}"))
-                        items.append(_mi(f"  \U0001f4c8 24h usage trend"))
-                    try:
-                        hits = _get_week_limit_hits(self._history_db, hkey)
-                    except Exception:
-                        hits = 0
-                    if hits > 0:
-                        items.append(_mi(f"  Hit limit {hits}x this week"))
-                    items.append(None)
-            else:
-                for line in _provider_lines(cursor_pd):
-                    if line:
-                        items.append(_mi(line))
-                items.append(None)
-
         # -- CLAUDE CODE section ----------------------------------------------
         if self._cc_stats:
             cc = self._cc_stats
@@ -2145,7 +2095,7 @@ class ClaudeBar(rumps.App):
 
         # -- Other API providers ----------------------------------------------
         for pd in self._provider_data:
-            if pd.name in ("ChatGPT", "Cursor"):
+            if pd.name == "ChatGPT":
                 continue
             items.append(_mi(f"  {pd.name}"))
             items.append(None)
@@ -2225,8 +2175,6 @@ class ClaudeBar(rumps.App):
             ("chatgpt_warning", "ChatGPT \u2014 usage warnings (80% / 95%)"),
             ("chatgpt_reset",   "ChatGPT \u2014 reset alerts"),
             ("chatgpt_pacing",  "ChatGPT \u2014 pacing alert (ETA < 30 min)"),
-            ("cursor_warning",  "Cursor \u2014 usage warnings (80% / 95%)"),
-            ("cursor_pacing",   "Cursor \u2014 pacing alert (ETA < 30 min)"),
         ]
         for nkey, nlabel in _notif_labels:
             item = rumps.MenuItem(nlabel, callback=self._make_notif_toggle_cb(nkey))
@@ -2510,7 +2458,7 @@ class ClaudeBar(rumps.App):
                 _append_history(self._history, "claude", data.session.pct)
             # Per-row history for multi-limit providers (avoids mixing
             # different limit types which made ETAs jump around).
-            for prefix, pname in [("chatgpt", "ChatGPT"), ("cursor", "Cursor")]:
+            for prefix, pname in [("chatgpt", "ChatGPT")]:
                 pd = next((p for p in self._provider_data if p.name == pname), None)
                 if pd and not pd.error:
                     rows = getattr(pd, "_rows", None)
@@ -2525,7 +2473,7 @@ class ClaudeBar(rumps.App):
                 with self._db_lock:
                     if data.session:
                         _record_sample(self._history_db, "claude", data.session.pct)
-                    for prefix, pname in [("chatgpt", "ChatGPT"), ("cursor", "Cursor")]:
+                    for prefix, pname in [("chatgpt", "ChatGPT")]:
                         pd = next((p for p in self._provider_data if p.name == pname), None)
                         if pd and not pd.error:
                             rows = getattr(pd, "_rows", None)
@@ -2639,7 +2587,6 @@ class ClaudeBar(rumps.App):
         """Send macOS notification when provider rate limits cross a threshold or reset."""
         _warn_providers = [
             ("ChatGPT", "chatgpt", "chatgpt_warning", "chatgpt_reset"),
-            ("Cursor",  "cursor",  "cursor_warning",  None),
         ]
         for pname, prefix, warn_nkey, reset_nkey in _warn_providers:
             pd = next((p for p in provider_data if p.name == pname), None)
@@ -2697,7 +2644,6 @@ class ClaudeBar(rumps.App):
         # Dynamic per-row entries for multi-limit providers
         for prefix, pname, nkey in [
             ("chatgpt", "ChatGPT", "chatgpt_pacing"),
-            ("cursor",  "Cursor",  "cursor_pacing"),
         ]:
             pd = next((p for p in self._provider_data if p.name == pname), None)
             if pd and not pd.error:
@@ -2725,7 +2671,6 @@ class ClaudeBar(rumps.App):
     _BAR_PROVIDERS = {
         "Claude":  {"icon": "claude_icon.png",        "tint": None,      "color": "#D97757", "sym": "\u25cf"},
         "ChatGPT": {"icon": "chatgpt_icon_clean.png", "tint": "#74AA9C", "color": "#74AA9C", "sym": "\u25c7"},
-        "Cursor":  {"icon": "cursor.png",             "tint": "#6699FF", "color": "#6699FF", "sym": "\u25c8"},
     }
 
     def _set_bar_title(self, provider_segments: list[tuple[str, int, str]],
@@ -2805,7 +2750,7 @@ class ClaudeBar(rumps.App):
     def _provider_bar_pct(self, pd: ProviderData) -> int | None:
         """Extract a single percentage for the menu bar from a provider.
 
-        Only the immediate-status rows count. A "(Weekly)" row is a longer
+        Only the immediate-status rows count. A "Weekly" or "(Weekly)" row is a longer
         horizon than the bar communicates and must not be able to outrank
         the 5h/session number - same principle as Claude's own bar icon,
         which is driven by the session limit, never the max of all limits.
@@ -2814,14 +2759,17 @@ class ClaudeBar(rumps.App):
             return None
         rows = getattr(pd, "_rows", None)
         if rows:
-            immediate = [r for r in rows if not r.label.endswith("(Weekly)")]
+            immediate = [
+                r for r in rows
+                if r.label != "Weekly" and not r.label.endswith("(Weekly)")
+            ]
             return max(r.pct for r in (immediate or rows))
         if pd.pct is not None:
             return pd.pct
         return None
 
     # Priority order for the 2 bar slots (highest first)
-    _BAR_PRIORITY = ["Claude", "ChatGPT", "Cursor"]
+    _BAR_PRIORITY = ["Claude", "ChatGPT"]
 
     def _apply(self, data: UsageData):
         primary = data.session or data.weekly_all or data.weekly_sonnet
@@ -2870,7 +2818,6 @@ class ClaudeBar(rumps.App):
         # Auto-detect ChatGPT cookies if not saved yet
         _cookie_detectors = {
             "chatgpt_cookies": _auto_detect_chatgpt_cookies,
-            "cursor_cookies":  _auto_detect_cursor_cookies,
         }
         for cfg_key in COOKIE_PROVIDERS:
             with self._config_lock:
@@ -2959,13 +2906,13 @@ class ClaudeBar(rumps.App):
             icon = _status_icon(pct)
             text = (
                 f"I've got {_remaining(pct)}% of my Claude session limit left {icon}\n"
-                f"Tracking Claude + ChatGPT + Cursor usage live in my macOS menu bar "
+                f"Tracking Claude + ChatGPT usage live in my macOS menu bar "
                 f"\u2014 zero setup, auto-detects from browser\n"
                 f"github.com/yagcioglutoprak/AIQuotaBar"
             )
         else:
             text = (
-                "Track Claude + ChatGPT + Cursor usage live in your macOS menu bar "
+                "Track Claude + ChatGPT usage live in your macOS menu bar "
                 "\u2014 zero setup, auto-detects from browser\n"
                 "github.com/yagcioglutoprak/AIQuotaBar"
             )
@@ -2978,7 +2925,6 @@ class ClaudeBar(rumps.App):
                 # Cookie-based: re-run auto-detect
                 _detectors = {
                     "chatgpt_cookies": _auto_detect_chatgpt_cookies,
-                    "cursor_cookies":  _auto_detect_cursor_cookies,
                 }
                 detect_fn = _detectors.get(cfg_key)
                 if detect_fn:
@@ -3032,7 +2978,6 @@ class ClaudeBar(rumps.App):
     _TOGGLE_ICONS = {
         "Claude":  ("claude_icon.png",        None),
         "ChatGPT": ("chatgpt_icon_clean.png", "#74AA9C"),
-        "Cursor":  ("cursor.png",             "#6699FF"),
     }
 
     def _make_sticky_toggle(self, display_name: str, is_on: bool, name: str):

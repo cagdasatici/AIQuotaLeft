@@ -5,20 +5,18 @@ import WidgetKit
 // MARK: - Provider enum
 
 enum AIProvider: String, AppEnum, CaseIterable, Codable {
-    case claude, chatgpt, cursor
+    case claude, chatgpt
 
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "AI Provider")
     static var caseDisplayRepresentations: [AIProvider: DisplayRepresentation] = [
         .claude:  "Claude",
         .chatgpt: "ChatGPT",
-        .cursor:  "Cursor",
     ]
 
     var displayName: String {
         switch self {
         case .claude:  return "Claude"
         case .chatgpt: return "ChatGPT"
-        case .cursor:  return "Cursor"
         }
     }
 
@@ -26,7 +24,6 @@ enum AIProvider: String, AppEnum, CaseIterable, Codable {
         switch self {
         case .claude:  return Color(red: 0.85, green: 0.55, blue: 0.35) // terracotta
         case .chatgpt: return Color(red: 0.45, green: 0.78, blue: 0.65) // mint
-        case .cursor:  return Color(red: 0.40, green: 0.60, blue: 1.00) // blue
         }
     }
 
@@ -34,7 +31,6 @@ enum AIProvider: String, AppEnum, CaseIterable, Codable {
         switch self {
         case .claude:  return "claude_icon"
         case .chatgpt: return "chatgpt_icon"
-        case .cursor:  return "cursor_icon"
         }
     }
 
@@ -42,7 +38,6 @@ enum AIProvider: String, AppEnum, CaseIterable, Codable {
         switch self {
         case .claude:  return false
         case .chatgpt: return true
-        case .cursor:  return true
         }
     }
 }
@@ -115,19 +110,6 @@ extension AIProvider {
                 return ProviderDisplayData(mainPct: 0, rows: [], error: err, extraInfo: nil, isConfigured: true)
             }
             if let rows = snap.chatgpt.rows {
-                let maxPct = rows.map(\.pct).max() ?? 0
-                return ProviderDisplayData(mainPct: maxPct, rows: rows, error: nil, extraInfo: nil, isConfigured: true)
-            }
-            return ProviderDisplayData(mainPct: 0, rows: [], error: nil, extraInfo: nil, isConfigured: false)
-
-        case .cursor:
-            guard let cursor = snap.cursor else {
-                return ProviderDisplayData(mainPct: 0, rows: [], error: nil, extraInfo: nil, isConfigured: false)
-            }
-            if let err = cursor.error {
-                return ProviderDisplayData(mainPct: 0, rows: [], error: err, extraInfo: nil, isConfigured: true)
-            }
-            if let rows = cursor.rows {
                 let maxPct = rows.map(\.pct).max() ?? 0
                 return ProviderDisplayData(mainPct: maxPct, rows: rows, error: nil, extraInfo: nil, isConfigured: true)
             }

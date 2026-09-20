@@ -32,10 +32,7 @@ def _write_widget_cache(
             active = []
             if cfg.get("cookie_str"):
                 active.append("claude")
-            _key_map = {
-                "chatgpt_cookies": "chatgpt",
-                "cursor_cookies":  "cursor",
-            }
+            _key_map = {"chatgpt_cookies": "chatgpt"}
             for cfg_key, prov_id in _key_map.items():
                 if cfg.get(cfg_key):
                     active.append(prov_id)
@@ -60,17 +57,6 @@ def _write_widget_cache(
                 raw_rows = getattr(chatgpt_pd, "_rows", None) or []
                 chatgpt_rows = [_row_dict(r) for r in raw_rows]
 
-        # Cursor rows
-        cursor_pd = next((p for p in providers if p.name == "Cursor"), None)
-        cursor_rows = None
-        cursor_error = None
-        if cursor_pd:
-            if cursor_pd.error:
-                cursor_error = cursor_pd.error
-            else:
-                raw_rows = getattr(cursor_pd, "_rows", None) or []
-                cursor_rows = [_row_dict(r) for r in raw_rows]
-
         payload = {
             "version": 1,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -83,10 +69,6 @@ def _write_widget_cache(
             "chatgpt": {
                 "rows": chatgpt_rows,
                 "error": chatgpt_error,
-            },
-            "cursor": {
-                "rows": cursor_rows,
-                "error": cursor_error,
             },
             "claude_code": {
                 "today_messages": (cc_stats or {}).get("today_messages", 0),

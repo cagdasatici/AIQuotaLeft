@@ -175,9 +175,8 @@ def _fmt_reset(val) -> str:
     A reset landing on the local calendar today or tomorrow says so -
     "resets today 14:32" / "resets tomorrow 09:00" - shorter than a weekday
     name and needs no arithmetic to place. Otherwise, under a week out, a
-    weekday name is unambiguous: "resets Wed 14:32". Further out - Cursor's
-    monthly billing cycle is the one case that reaches this - a bare weekday
-    would be ambiguous (which Wednesday?), so the calendar date is used
+    weekday name is unambiguous: "resets Wed 14:32". Further out, a bare
+    weekday would be ambiguous (which Wednesday?), so the calendar date is used
     instead: "resets Oct 5, 14:32".
     """
     if val is None:
@@ -234,9 +233,9 @@ def parse_usage(raw: dict) -> UsageData:
     overages = bool(extra) if extra is not None else None
 
     return UsageData(
-        session=_row(u, "five_hour", "Current Session"),
-        weekly_all=_row(u, "seven_day", "All Models"),
-        weekly_sonnet=_row(u, "seven_day_sonnet", "Sonnet Only"),
+        session=_row(u, "five_hour", "5-hour"),
+        weekly_all=_row(u, "seven_day", "Weekly"),
+        weekly_sonnet=_row(u, "seven_day_sonnet", "Weekly (Sonnet)"),
         overages_enabled=overages,
         raw=raw,
     )
@@ -363,7 +362,9 @@ def _parse_wham_window(pw: dict | None, label: str) -> LimitRow | None:
     return LimitRow(label, pct, reset_str)
 
 
-def _parse_wham_bucket(bucket: dict, label: str) -> list[LimitRow]:
+def _parse_wham_bucket(
+    bucket: dict, primary_label: str, weekly_label: str | None = None,
+) -> list[LimitRow]:
     """Parse a rate-limit bucket into its 5h and weekly rows.
 
     Each bucket (`rate_limit`, `code_review_rate_limit`, and any entry in
@@ -374,10 +375,12 @@ def _parse_wham_bucket(bucket: dict, label: str) -> list[LimitRow]:
     if not bucket or not isinstance(bucket, dict):
         return []
     rows = []
-    row = _parse_wham_window(bucket.get("primary_window"), label)
+    row = _parse_wham_window(bucket.get("primary_window"), primary_label)
     if row is not None:
         rows.append(row)
-    row = _parse_wham_window(bucket.get("secondary_window"), f"{label} (Weekly)")
+    row = _parse_wham_window(
+        bucket.get("secondary_window"), weekly_label or f"{primary_label} (Weekly)"
+    )
     if row is not None:
         rows.append(row)
     return rows
@@ -397,11 +400,11 @@ def _parse_wham_usage(data: dict) -> ProviderData:
     rows: list[LimitRow] = []
 
     label_map = {
-        "rate_limit":            "Codex Tasks",
-        "code_review_rate_limit": "Code Review",
+        "rate_limit":             ("5-hour", "Weekly"),
+        "code_review_rate_limit": ("Code Review (5-hour)", "Code Review (Weekly)"),
     }
-    for key, label in label_map.items():
-        rows.extend(_parse_wham_bucket(data.get(key), label))
+    for key, labels in label_map.items():
+        rows.extend(_parse_wham_bucket(data.get(key), *labels))
 
     # additional_rate_limits may be a list of extra buckets
     for extra in (data.get("additional_rate_limits") or []):
@@ -539,53 +542,18 @@ def fetch_glm(api_key: str) -> ProviderData:
         return ProviderData("GLM (Zhipu)", error=str(e)[:80])
 
 
-def fetch_cursor(cookie_str: str) -> ProviderData:
-    """Fetch Cursor IDE usage via browser cookies (WorkOS session)."""
-    cookies = parse_cookie_string(cookie_str)
-    try:
-        r = requests.get(
-            "https://cursor.com/api/usage-summary",
-            cookies=_strip_cf_cookies(cookies),
-            headers={
-                "Accept": "application/json",
-                "Referer": "https://cursor.com/dashboard?tab=usage",
-            },
-            timeout=10,
-            impersonate=_IMPERSONATE,
-        )
-        r.raise_for_status()
-        data = r.json()
-        log.debug("cursor usage-summary: %s", json.dumps(data, indent=2))
-        plan = (data.get("individualUsage") or {}).get("plan") or {}
-        auto_pct = int(round(float(plan.get("autoPercentUsed", 0))))
-        api_pct = int(round(float(plan.get("apiPercentUsed", 0))))
-        total_pct = int(round(float(plan.get("totalPercentUsed", 0))))
-        reset_str = _fmt_reset(data.get("billingCycleEnd"))
-        rows = [
-            LimitRow(label="Auto", pct=auto_pct, reset_str=reset_str),
-            LimitRow(label="API", pct=api_pct, reset_str=reset_str),
-        ]
-        pd = ProviderData("Cursor", spent=float(total_pct), limit=100.0, currency="")
-        pd._rows = rows
-        return pd
-    except Exception as e:
-        log.debug("fetch_cursor failed: %s", e)
-        return ProviderData("Cursor", error=str(e)[:80])
-
-
 # Registry: config_key -> (display_name, fetch_fn)
 # chatgpt_cookies are cookie-based (auto-detected);
 # others are API key-based.
 PROVIDER_REGISTRY: dict[str, tuple[str, callable]] = {
     "chatgpt_cookies": ("ChatGPT",     fetch_chatgpt),
-    "cursor_cookies":  ("Cursor",      fetch_cursor),
     "openai_key":      ("OpenAI",      fetch_openai),
     "minimax_key":     ("MiniMax",     fetch_minimax),
     "glm_key":         ("GLM (Zhipu)", fetch_glm),
 }
 
 # Cookie-based providers (auto-detected from browser, not manually entered)
-COOKIE_PROVIDERS = {"chatgpt_cookies", "cursor_cookies"}
+COOKIE_PROVIDERS = {"chatgpt_cookies"}
 
 
 # ── Claude Code local stats ───────────────────────────────────────────────────
@@ -785,11 +753,3 @@ def _auto_detect_chatgpt_cookies(exclude: set[str] | None = None) -> str | None:
         except Exception as e:
             log.debug("ChatGPT cookie candidate rejected: %s", e)
     return fallback
-
-
-def _auto_detect_cursor_cookies() -> str | None:
-    """Detect cursor.com session cookies from the browser (crash-safe subprocess)."""
-    if not _BROWSER_COOKIE3_OK:
-        return None
-    cands = _run_cookie_detection("cursor.com", "WorkosCursorSessionToken")
-    return cands[0] if cands else None

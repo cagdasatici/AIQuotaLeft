@@ -4,9 +4,7 @@ Two bugs fixed together:
 
 1. Under-20h resets rendered as a relative countdown ("resets in 4h 12m"),
    inconsistent with the weekly cap's absolute "resets Mon 18:59" - and a
-   countdown goes stale the moment it's read. Cursor built its own separate
-   "resets in Nd Nh" string and never went through the shared formatter at
-   all, so unifying the threshold alone would not have fixed it.
+   countdown goes stale the moment it's read.
 
 2. The shared formatter never converted the API's UTC timestamp to local
    time before formatting, so the printed clock time was silently wrong by
@@ -41,8 +39,6 @@ class AlwaysAbsolute(unittest.TestCase):
         self.assertNotIn("in ", out)
 
     def test_monthly_horizon_is_not_relative(self):
-        # Cursor's billing cycle: the case that had its own separate,
-        # never-unified "resets in Nd Nh" string.
         out = _fmt_reset(_iso(timedelta(days=27)))
         self.assertNotIn("in ", out)
 
@@ -121,16 +117,11 @@ class Disambiguation(unittest.TestCase):
         self.assertRegex(out, r"[A-Z][a-z]{2} \d{1,2},")
 
 
-class CursorUsesSharedFormatter(unittest.TestCase):
+class SharedFormatterSource(unittest.TestCase):
     def test_no_hand_rolled_relative_string_left_in_source(self):
         src = (REPO / "aiquotabar" / "providers.py").read_text()
         self.assertNotIn('f"resets in {days}d {hours}h"', src)
         self.assertNotIn('f"resets in {hours}h"', src)
-
-    def test_cursor_reset_is_built_from_fmt_reset(self):
-        src = (REPO / "aiquotabar" / "providers.py").read_text()
-        self.assertIn('reset_str = _fmt_reset(data.get("billingCycleEnd"))', src)
-
 
 if __name__ == "__main__":
     unittest.main()

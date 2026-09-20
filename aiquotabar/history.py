@@ -315,7 +315,7 @@ def _fetch_history_data(conn: sqlite3.Connection) -> dict | None:
     per_day_detail: dict[str, dict] = {}  # date -> {key: {peak_pct, avg_pct}}
 
     for date, key, peak, avg, hits, cnt in past_rows:
-        if key == "copilot" or key.startswith("copilot_"):
+        if key in ("copilot", "cursor") or key.startswith(("copilot_", "cursor_")):
             continue
         per_key.setdefault(key, []).append({
             "date": date, "peak_pct": peak, "avg_pct": avg,
@@ -325,7 +325,7 @@ def _fetch_history_data(conn: sqlite3.Connection) -> dict | None:
         per_day_detail.setdefault(date, {})[key] = {"peak_pct": peak, "avg_pct": avg}
 
     for key, stat in today_stats.items():
-        if key == "copilot" or key.startswith("copilot_"):
+        if key in ("copilot", "cursor") or key.startswith(("copilot_", "cursor_")):
             continue
         per_key.setdefault(key, []).append(stat)
         per_day[today] = max(per_day.get(today, 0), stat["avg_pct"])
@@ -341,7 +341,7 @@ def _fetch_history_data(conn: sqlite3.Connection) -> dict | None:
             (today,),
         ).fetchall()
         for key, ts, pct in raw:
-            if key == "copilot" or key.startswith("copilot_"):
+            if key in ("copilot", "cursor") or key.startswith(("copilot_", "cursor_")):
                 continue
             dt = datetime.fromtimestamp(ts, tz=timezone.utc)
             widx = min(dt.hour // 5, 4)
@@ -366,7 +366,7 @@ def _fetch_history_data(conn: sqlite3.Connection) -> dict | None:
         # Color: use parent provider color for sub-keys
         color = HISTORY_COLORS.get(key)
         if color is None:
-            for prefix in ("chatgpt", "cursor", "claude"):
+            for prefix in ("chatgpt", "claude"):
                 if key.startswith(prefix):
                     color = HISTORY_COLORS[prefix]
                     break
@@ -424,7 +424,8 @@ def cli_history():
     conn = sqlite3.connect(HISTORY_DB)
     conn.execute("PRAGMA journal_mode=WAL")
     keys = [r[0] for r in conn.execute(
-        "SELECT DISTINCT key FROM daily_stats WHERE key NOT LIKE 'copilot%' ORDER BY key"
+        "SELECT DISTINCT key FROM daily_stats "
+        "WHERE key NOT LIKE 'copilot%' AND key NOT LIKE 'cursor%' ORDER BY key"
     ).fetchall()]
 
     if not keys:
@@ -436,7 +437,6 @@ def cli_history():
     _colors = {
         "claude": "\033[38;5;209m",   # orange
         "chatgpt": "\033[38;5;114m",  # green
-        "cursor": "\033[38;5;45m",    # cyan
     }
     _reset = "\033[0m"
     _dim = "\033[2m"
