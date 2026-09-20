@@ -75,6 +75,7 @@ class FloatingPanelResetTimes(unittest.TestCase):
     def test_each_limit_row_renders_its_reset_time(self):
         ui = (REPO / "aiquotabar" / "ui.py").read_text()
         self.assertIn("reset_label = _panel_reset_label(row.reset_str)", ui)
+        self.assertIn("reset_lbl.setTextColor_(NSColor.secondaryLabelColor())", ui)
 
 
 class StatusIcon(unittest.TestCase):

@@ -1847,8 +1847,8 @@ class _UsagePanel:
             reset_lbl.setEditable_(False)
             reset_lbl.setSelectable_(False)
             reset_lbl.setAlignment_(NSTextAlignmentLeft)
-            reset_lbl.setFont_(NSFont.systemFontOfSize_(9))
-            reset_lbl.setTextColor_(NSColor.tertiaryLabelColor())
+            reset_lbl.setFont_(NSFont.systemFontOfSize_(10))
+            reset_lbl.setTextColor_(NSColor.secondaryLabelColor())
             parent.addSubview_(reset_lbl)
 
         # Track (background)
