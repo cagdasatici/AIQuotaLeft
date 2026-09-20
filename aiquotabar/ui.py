@@ -798,6 +798,15 @@ def _row_lines(row: LimitRow) -> list[str]:
     return [line1, line2]
 
 
+def _panel_reset_label(reset_str: str) -> str:
+    """Compact a row's reset copy for the floating panel.
+
+    Claude omits a 5-hour reset while that rolling window has not started.
+    Say so rather than rendering a blank line or inventing a date.
+    """
+    return reset_str.removeprefix("resets ") if reset_str else "starts on use"
+
+
 def _provider_lines(pd: ProviderData) -> list[str]:
     sym = "\u00a5" if pd.currency == "CNY" else ("" if pd.currency == "" else "$")
     if pd.error:
@@ -1566,16 +1575,16 @@ class _UsagePanel:
         # Claude section
         if data and any([data.session, data.weekly_all, data.weekly_sonnet]):
             has_any_data = True
-            # Provider header: dot + name + reset time
-            elements.append(('provider_header', y, 18, 'Claude', '#D97757',
-                             data.session.reset_str if data.session else ''))
+            # Each limit row carries its own reset time, so the provider
+            # header remains a clean identifier rather than privileging 5-hour.
+            elements.append(('provider_header', y, 18, 'Claude', '#D97757', ''))
             y += 18 + 6
 
             # Rows
             for row in [data.session, data.weekly_all, data.weekly_sonnet]:
                 if row:
-                    elements.append(('limit_row', y, 20, row, '#D97757'))
-                    y += 20 + self.ROW_GAP
+                    elements.append(('limit_row', y, 32, row, '#D97757'))
+                    y += 32 + self.ROW_GAP
 
             # ETA
             eta = _calc_eta_minutes(history, "claude")
@@ -1605,12 +1614,11 @@ class _UsagePanel:
         if chatgpt_pd and not chatgpt_pd.error:
             has_any_data = True
             rows = getattr(chatgpt_pd, "_rows", None) or []
-            reset_str = rows[0].reset_str if rows else ""
-            elements.append(('provider_header', y, 18, 'ChatGPT', '#74AA9C', reset_str))
+            elements.append(('provider_header', y, 18, 'ChatGPT', '#74AA9C', ''))
             y += 18 + 6
             for row in rows:
-                elements.append(('limit_row', y, 20, row, '#74AA9C'))
-                y += 20 + self.ROW_GAP
+                elements.append(('limit_row', y, 32, row, '#74AA9C'))
+                y += 32 + self.ROW_GAP
                 hkey = f"chatgpt_{row.label.lower().replace(' ', '_')}"
                 eta = _calc_eta_minutes(history, hkey)
                 if eta is not None:
@@ -1806,15 +1814,18 @@ class _UsagePanel:
     def _render_limit_row(self, parent, x, y, w, h, row, color_hex,
                           NSView, NSTextField, NSFont, NSColor, NSMakeRect,
                           NSTextAlignmentLeft, NSTextAlignmentRight, Quartz):
-        """Render: label + progress bar + pct% text."""
-        label_w = 80
+        """Render: label/reset pair + progress bar + remaining percentage."""
+        label_w = 94
         pct_w = 40
         bar_x = x + label_w + 4
         bar_w = w - label_w - pct_w - 8
         bar_y = y + (h - self.PROGRESS_H) / 2
 
-        # Label
-        lbl = NSTextField.alloc().initWithFrame_(NSMakeRect(x, y, label_w, h))
+        # Label and reset time share the left column, leaving the bar uncluttered.
+        label_h = 14
+        lbl = NSTextField.alloc().initWithFrame_(
+            NSMakeRect(x, y + h - label_h, label_w, label_h)
+        )
         lbl.setStringValue_(row.label)
         lbl.setBezeled_(False)
         lbl.setDrawsBackground_(False)
@@ -1824,6 +1835,21 @@ class _UsagePanel:
         lbl.setFont_(NSFont.systemFontOfSize_(11))
         lbl.setTextColor_(NSColor.secondaryLabelColor())
         parent.addSubview_(lbl)
+
+        reset_label = _panel_reset_label(row.reset_str)
+        if reset_label:
+            reset_lbl = NSTextField.alloc().initWithFrame_(
+                NSMakeRect(x, y + 1, label_w, 12)
+            )
+            reset_lbl.setStringValue_(reset_label)
+            reset_lbl.setBezeled_(False)
+            reset_lbl.setDrawsBackground_(False)
+            reset_lbl.setEditable_(False)
+            reset_lbl.setSelectable_(False)
+            reset_lbl.setAlignment_(NSTextAlignmentLeft)
+            reset_lbl.setFont_(NSFont.systemFontOfSize_(9))
+            reset_lbl.setTextColor_(NSColor.tertiaryLabelColor())
+            parent.addSubview_(reset_lbl)
 
         # Track (background)
         track = NSView.alloc().initWithFrame_(NSMakeRect(bar_x, bar_y, bar_w, self.PROGRESS_H))
@@ -1849,7 +1875,9 @@ class _UsagePanel:
             parent.addSubview_(fill)
 
         # Percentage text
-        pct_lbl = NSTextField.alloc().initWithFrame_(NSMakeRect(x + w - pct_w, y, pct_w, h))
+        pct_lbl = NSTextField.alloc().initWithFrame_(
+            NSMakeRect(x + w - pct_w, y, pct_w, h)
+        )
         pct_lbl.setStringValue_(f"{left}%")
         pct_lbl.setBezeled_(False)
         pct_lbl.setDrawsBackground_(False)

@@ -65,6 +65,18 @@ class MenuRendering(unittest.TestCase):
         self.assertIn(f"{_remaining(used)}%", self._row(used)[0])
 
 
+class FloatingPanelResetTimes(unittest.TestCase):
+    def test_compacts_reset_copy_but_keeps_date_and_time(self):
+        from aiquotabar.ui import _panel_reset_label
+        self.assertEqual(_panel_reset_label("resets today 21:16"), "today 21:16")
+        self.assertEqual(_panel_reset_label("resets Wed 23:00"), "Wed 23:00")
+        self.assertEqual(_panel_reset_label(""), "starts on use")
+
+    def test_each_limit_row_renders_its_reset_time(self):
+        ui = (REPO / "aiquotabar" / "ui.py").read_text()
+        self.assertIn("reset_label = _panel_reset_label(row.reset_str)", ui)
+
+
 class StatusIcon(unittest.TestCase):
     def test_red_when_almost_out(self):
         from aiquotabar.ui import _status_icon
