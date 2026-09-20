@@ -804,6 +804,19 @@ def _panel_reset_label(reset_str: str) -> str:
     return reset_str.removeprefix("resets ") if reset_str else "starts on use"
 
 
+def _panel_limit_label(row: LimitRow) -> str:
+    """Fit a limit's window and reset time into one floating-panel line."""
+    window = {
+        "5-hour": "5h",
+        "Weekly": "W",
+        "Weekly (Sonnet)": "W/S",
+    }.get(row.label, row.label)
+    reset = _panel_reset_label(row.reset_str)
+    if reset.startswith("today "):
+        reset = reset.removeprefix("today ")
+    return f"{window} \u00b7 {reset}"
+
+
 def _provider_lines(pd: ProviderData) -> list[str]:
     sym = "\u00a5" if pd.currency == "CNY" else ("" if pd.currency == "" else "$")
     if pd.error:
@@ -1580,8 +1593,8 @@ class _UsagePanel:
             # Rows
             for row in [data.session, data.weekly_all, data.weekly_sonnet]:
                 if row:
-                    elements.append(('limit_row', y, 32, row, '#D97757'))
-                    y += 32 + self.ROW_GAP
+                    elements.append(('limit_row', y, 20, row, '#D97757'))
+                    y += 20 + self.ROW_GAP
 
             # ETA
             eta = _calc_eta_minutes(history, "claude")
@@ -1605,8 +1618,8 @@ class _UsagePanel:
             elements.append(('provider_header', y, 18, 'ChatGPT', '#74AA9C', ''))
             y += 18 + 6
             for row in rows:
-                elements.append(('limit_row', y, 32, row, '#74AA9C'))
-                y += 32 + self.ROW_GAP
+                elements.append(('limit_row', y, 20, row, '#74AA9C'))
+                y += 20 + self.ROW_GAP
                 hkey = f"chatgpt_{row.label.lower().replace(' ', '_')}"
                 eta = _calc_eta_minutes(history, hkey)
                 if eta is not None:
@@ -1794,42 +1807,24 @@ class _UsagePanel:
     def _render_limit_row(self, parent, x, y, w, h, row, color_hex,
                           NSView, NSTextField, NSFont, NSColor, NSMakeRect,
                           NSTextAlignmentLeft, NSTextAlignmentRight, Quartz):
-        """Render: label/reset pair + progress bar + remaining percentage."""
-        label_w = 94
+        """Render: compact window/reset label + progress bar + percentage."""
+        label_w = 112
         pct_w = 40
         bar_x = x + label_w + 4
         bar_w = w - label_w - pct_w - 8
         bar_y = y + (h - self.PROGRESS_H) / 2
 
-        # Label and reset time share the left column, leaving the bar uncluttered.
-        label_h = 14
-        lbl = NSTextField.alloc().initWithFrame_(
-            NSMakeRect(x, y + h - label_h, label_w, label_h)
-        )
-        lbl.setStringValue_(row.label)
+        # One line keeps the panel compact while preserving which window resets.
+        lbl = NSTextField.alloc().initWithFrame_(NSMakeRect(x, y, label_w, h))
+        lbl.setStringValue_(_panel_limit_label(row))
         lbl.setBezeled_(False)
         lbl.setDrawsBackground_(False)
         lbl.setEditable_(False)
         lbl.setSelectable_(False)
         lbl.setAlignment_(NSTextAlignmentLeft)
-        lbl.setFont_(NSFont.systemFontOfSize_(11))
+        lbl.setFont_(NSFont.systemFontOfSize_(10))
         lbl.setTextColor_(NSColor.secondaryLabelColor())
         parent.addSubview_(lbl)
-
-        reset_label = _panel_reset_label(row.reset_str)
-        if reset_label:
-            reset_lbl = NSTextField.alloc().initWithFrame_(
-                NSMakeRect(x, y + 1, label_w, 12)
-            )
-            reset_lbl.setStringValue_(reset_label)
-            reset_lbl.setBezeled_(False)
-            reset_lbl.setDrawsBackground_(False)
-            reset_lbl.setEditable_(False)
-            reset_lbl.setSelectable_(False)
-            reset_lbl.setAlignment_(NSTextAlignmentLeft)
-            reset_lbl.setFont_(NSFont.systemFontOfSize_(10))
-            reset_lbl.setTextColor_(NSColor.secondaryLabelColor())
-            parent.addSubview_(reset_lbl)
 
         # Track (background)
         track = NSView.alloc().initWithFrame_(NSMakeRect(bar_x, bar_y, bar_w, self.PROGRESS_H))

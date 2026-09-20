@@ -67,15 +67,23 @@ class MenuRendering(unittest.TestCase):
 
 class FloatingPanelResetTimes(unittest.TestCase):
     def test_compacts_reset_copy_but_keeps_date_and_time(self):
-        from aiquotabar.ui import _panel_reset_label
+        from aiquotabar.providers import LimitRow
+        from aiquotabar.ui import _panel_limit_label, _panel_reset_label
         self.assertEqual(_panel_reset_label("resets today 21:16"), "today 21:16")
         self.assertEqual(_panel_reset_label("resets Wed 23:00"), "Wed 23:00")
         self.assertEqual(_panel_reset_label(""), "starts on use")
+        self.assertEqual(
+            _panel_limit_label(LimitRow("5-hour", 0, "resets today 21:16")),
+            "5h · 21:16",
+        )
+        self.assertEqual(
+            _panel_limit_label(LimitRow("Weekly", 0, "resets Sep 27, 16:16")),
+            "W · Sep 27, 16:16",
+        )
 
     def test_each_limit_row_renders_its_reset_time(self):
         ui = (REPO / "aiquotabar" / "ui.py").read_text()
-        self.assertIn("reset_label = _panel_reset_label(row.reset_str)", ui)
-        self.assertIn("reset_lbl.setTextColor_(NSColor.secondaryLabelColor())", ui)
+        self.assertIn("lbl.setStringValue_(_panel_limit_label(row))", ui)
 
 
 class LimitHitDisplay(unittest.TestCase):
