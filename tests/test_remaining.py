@@ -69,16 +69,16 @@ class FloatingPanelResetTimes(unittest.TestCase):
     def test_compacts_reset_copy_but_keeps_date_and_time(self):
         from aiquotabar.providers import LimitRow
         from aiquotabar.ui import _panel_limit_label, _panel_reset_label
-        self.assertEqual(_panel_reset_label("resets today 21:16"), "today 21:16")
-        self.assertEqual(_panel_reset_label("resets Wed 23:00"), "Wed 23:00")
+        self.assertEqual(_panel_reset_label("resets today 21:16"), "21:16")
+        self.assertEqual(_panel_reset_label("resets tomorrow 21:16"), "+1d 21:16")
         self.assertEqual(_panel_reset_label(""), "starts on use")
         self.assertEqual(
             _panel_limit_label(LimitRow("5-hour", 0, "resets today 21:16")),
             "5h · 21:16",
         )
         self.assertEqual(
-            _panel_limit_label(LimitRow("Weekly", 0, "resets Sep 27, 16:16")),
-            "W · Sep 27, 16:16",
+            _panel_limit_label(LimitRow("Weekly", 0, "resets tomorrow 16:16")),
+            "W · +1d 16:16",
         )
 
     def test_each_limit_row_renders_its_reset_time(self):

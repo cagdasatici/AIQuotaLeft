@@ -799,9 +799,37 @@ def _panel_reset_label(reset_str: str) -> str:
     """Compact a row's reset copy for the floating panel.
 
     Claude omits a 5-hour reset while that rolling window has not started.
-    Say so rather than rendering a blank line or inventing a date.
+    Say so rather than rendering a blank line or inventing a date. Keep
+    near-term resets relative so their distance is instantly scannable.
     """
-    return reset_str.removeprefix("resets ") if reset_str else "starts on use"
+    if not reset_str:
+        return "starts on use"
+
+    text = reset_str.removeprefix("resets ")
+    if text.startswith("today "):
+        return text.removeprefix("today ")
+    if text.startswith("tomorrow "):
+        return f"+1d {text.removeprefix('tomorrow ')}"
+
+    now = datetime.now().astimezone()
+    weekday, _, clock = text.partition(" ")
+    weekdays = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    if weekday in weekdays and clock:
+        days = (weekdays.index(weekday) - now.weekday()) % 7 or 7
+        return f"+{days}d {clock}"
+
+    try:
+        target = datetime.strptime(text, "%b %d, %H:%M").replace(
+            year=now.year, tzinfo=now.tzinfo
+        )
+        if target < now:
+            target = target.replace(year=target.year + 1)
+        days = (target.date() - now.date()).days
+        if 1 <= days <= 7:
+            return f"+{days}d {target.strftime('%H:%M')}"
+    except ValueError:
+        pass
+    return text.replace(",", "")
 
 
 def _panel_limit_label(row: LimitRow) -> str:
@@ -811,10 +839,7 @@ def _panel_limit_label(row: LimitRow) -> str:
         "Weekly": "W",
         "Weekly (Sonnet)": "W/S",
     }.get(row.label, row.label)
-    reset = _panel_reset_label(row.reset_str)
-    if reset.startswith("today "):
-        reset = reset.removeprefix("today ")
-    return f"{window} \u00b7 {reset}"
+    return f"{window} \u00b7 {_panel_reset_label(row.reset_str)}"
 
 
 def _provider_lines(pd: ProviderData) -> list[str]:
